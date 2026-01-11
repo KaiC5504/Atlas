@@ -11,6 +11,8 @@ pub struct UpdateSettingsParams {
     pub max_concurrent_downloads: Option<u32>,
     pub max_concurrent_ml_jobs: Option<u32>,
     pub atlas_project_path: Option<String>,
+    pub remote_update_path: Option<String>,
+    pub update_url_base: Option<String>,
 }
 
 /// Get current settings from the JSON file
@@ -55,6 +57,20 @@ pub fn update_settings(settings: UpdateSettingsParams) -> Result<Settings, Strin
             None
         } else {
             Some(atlas_project_path)
+        };
+    }
+    if let Some(remote_update_path) = settings.remote_update_path {
+        current_settings.remote_update_path = if remote_update_path.is_empty() {
+            None
+        } else {
+            Some(remote_update_path)
+        };
+    }
+    if let Some(update_url_base) = settings.update_url_base {
+        current_settings.update_url_base = if update_url_base.is_empty() {
+            None
+        } else {
+            Some(update_url_base)
         };
     }
 

@@ -17,6 +17,10 @@ pub struct Settings {
     pub valorant_credentials: Option<ValorantCredentials>,
     #[serde(default)]
     pub atlas_project_path: Option<String>,
+    #[serde(default)]
+    pub remote_update_path: Option<String>,
+    #[serde(default)]
+    pub update_url_base: Option<String>,
 }
 
 impl Default for Settings {
@@ -28,6 +32,8 @@ impl Default for Settings {
             max_concurrent_ml_jobs: 1,
             valorant_credentials: None,
             atlas_project_path: None,
+            remote_update_path: None,
+            update_url_base: None,
         }
     }
 }

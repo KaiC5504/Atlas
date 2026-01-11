@@ -29,6 +29,8 @@ export function Settings() {
   const [maxConcurrentDownloads, setMaxConcurrentDownloads] = useState(3);
   const [maxConcurrentMLJobs, setMaxConcurrentMLJobs] = useState(1);
   const [atlasProjectPath, setAtlasProjectPath] = useState('');
+  const [remoteUpdatePath, setRemoteUpdatePath] = useState('');
+  const [updateUrlBase, setUpdateUrlBase] = useState('');
 
   useEffect(() => {
     fetchSettings();
@@ -45,6 +47,8 @@ export function Settings() {
       setMaxConcurrentDownloads(result.max_concurrent_downloads);
       setMaxConcurrentMLJobs(result.max_concurrent_ml_jobs);
       setAtlasProjectPath(result.atlas_project_path || '');
+      setRemoteUpdatePath(result.remote_update_path || '');
+      setUpdateUrlBase(result.update_url_base || '');
     } catch (err) {
       setError(String(err));
     } finally {
@@ -63,6 +67,8 @@ export function Settings() {
         max_concurrent_downloads: maxConcurrentDownloads,
         max_concurrent_ml_jobs: maxConcurrentMLJobs,
         atlas_project_path: atlasProjectPath,
+        remote_update_path: remoteUpdatePath,
+        update_url_base: updateUrlBase,
       };
       await invoke('update_settings', { settings: params });
       setMessage({ type: 'success', text: 'Settings saved successfully!' });
@@ -213,22 +219,58 @@ export function Settings() {
               <Code size={18} className="text-cyan-400" />
               <h2 className="card-title mb-0">Developer Settings</h2>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-text-secondary mb-2">
-                <FolderOpen size={14} className="inline mr-2" />
-                Atlas Project Path
-              </label>
-              <input
-                type="text"
-                value={atlasProjectPath}
-                onChange={(e) => setAtlasProjectPath(e.target.value)}
-                disabled={saving}
-                className="input"
-                placeholder="E:\tools\Kai Chuan\Projects\Atlas"
-              />
-              <p className="text-xs text-text-muted mt-1">
-                Path to the Atlas project folder. Used for auto-detecting build files when deploying updates.
-              </p>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-2">
+                  <FolderOpen size={14} className="inline mr-2" />
+                  Atlas Project Path
+                </label>
+                <input
+                  type="text"
+                  value={atlasProjectPath}
+                  onChange={(e) => setAtlasProjectPath(e.target.value)}
+                  disabled={saving}
+                  className="input"
+                  placeholder="E:\tools\Kai Chuan\Projects\Atlas"
+                />
+                <p className="text-xs text-text-muted mt-1">
+                  Path to the Atlas project folder. Used for auto-detecting build files when deploying updates.
+                </p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-2">
+                  <FolderOpen size={14} className="inline mr-2" />
+                  Remote Update Path
+                </label>
+                <input
+                  type="text"
+                  value={remoteUpdatePath}
+                  onChange={(e) => setRemoteUpdatePath(e.target.value)}
+                  disabled={saving}
+                  className="input"
+                  placeholder="/var/www/updates.example.com/atlas"
+                />
+                <p className="text-xs text-text-muted mt-1">
+                  Remote server path where update files are uploaded via SFTP.
+                </p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-2">
+                  <FolderOpen size={14} className="inline mr-2" />
+                  Update URL Base
+                </label>
+                <input
+                  type="text"
+                  value={updateUrlBase}
+                  onChange={(e) => setUpdateUrlBase(e.target.value)}
+                  disabled={saving}
+                  className="input"
+                  placeholder="https://updates.example.com/atlas"
+                />
+                <p className="text-xs text-text-muted mt-1">
+                  Public URL base for update files. Used for update.json verification.
+                </p>
+              </div>
             </div>
           </div>
 

@@ -94,12 +94,13 @@ export function ServerMonitor() {
   const [signatureLoading, setSignatureLoading] = useState(false);
   const [installerExists, setInstallerExists] = useState<boolean | null>(null);
   const [atlasProjectPath, setAtlasProjectPath] = useState<string | null>(null);
+  const [remoteUpdatePath, setRemoteUpdatePath] = useState<string | null>(null);
+  const [updateUrlBase, setUpdateUrlBase] = useState<string | null>(null);
 
   // Computed paths based on settings
   const LOCAL_BUILD_PATH = atlasProjectPath
     ? `${atlasProjectPath}\\src-tauri\\target\\release\\bundle\\nsis`
     : null;
-  const REMOTE_UPDATE_PATH = '/var/www/YOUR_DOMAIN/atlas';
 
   // Auto-fetch signature when version changes
   useEffect(() => {
@@ -228,6 +229,8 @@ export function ServerMonitor() {
       setQuickActions(actions);
       setHasCredentials(hasCreds);
       setAtlasProjectPath(settings.atlas_project_path);
+      setRemoteUpdatePath(settings.remote_update_path);
+      setUpdateUrlBase(settings.update_url_base);
     } catch (err) {
       setError(String(err));
     } finally {
@@ -356,13 +359,23 @@ export function ServerMonitor() {
       return;
     }
 
+    if (!remoteUpdatePath) {
+      setReleaseError('Remote update path not configured. Set it in Settings.');
+      return;
+    }
+
+    if (!updateUrlBase) {
+      setReleaseError('Update URL base not configured. Set it in Settings.');
+      return;
+    }
+
     try {
       setReleaseError(null);
       setReleaseStep('uploading');
       setReleaseProgress(0);
 
       const localFile = `${LOCAL_BUILD_PATH}\\Atlas_${releaseVersion}_x64-setup.exe`;
-      const remoteFile = `${REMOTE_UPDATE_PATH}/Atlas_${releaseVersion}_x64-setup.exe`;
+      const remoteFile = `${remoteUpdatePath}/Atlas_${releaseVersion}_x64-setup.exe`;
 
       addTerminalLine(`[Update Release] Starting deployment of v${releaseVersion}...`, false, true);
 
@@ -391,7 +404,7 @@ export function ServerMonitor() {
         pub_date: pubDate,
         platforms: {
           'windows-x86_64': {
-            url: `https://YOUR_DOMAIN/atlas/Atlas_${releaseVersion}_x64-setup.exe`,
+            url: `${updateUrlBase}/Atlas_${releaseVersion}_x64-setup.exe`,
             signature: releaseSignature,
           },
         },
@@ -399,7 +412,7 @@ export function ServerMonitor() {
 
       // Escape the JSON for shell command
       const escapedJson = updateJson.replace(/'/g, "'\\''");
-      const updateJsonCommand = `echo '${escapedJson}' > ${REMOTE_UPDATE_PATH}/update.json`;
+      const updateJsonCommand = `echo '${escapedJson}' > ${remoteUpdatePath}/update.json`;
 
       try {
         const result = await invoke<CommandResult>('execute_ssh_command', {
@@ -419,7 +432,7 @@ export function ServerMonitor() {
 
       try {
         const result = await invoke<CommandResult>('execute_ssh_command', {
-          command: `chown www-data:www-data ${REMOTE_UPDATE_PATH}/update.json`,
+          command: `chown www-data:www-data ${remoteUpdatePath}/update.json`,
         });
         if (result.exit_code !== 0) {
           throw new Error(result.error || 'Failed to set ownership');
@@ -436,7 +449,7 @@ export function ServerMonitor() {
       try {
         // Verify update.json
         const jsonResult = await invoke<CommandResult>('execute_ssh_command', {
-          command: `curl -s https://YOUR_DOMAIN/atlas/update.json | grep '"version":"${releaseVersion}"'`,
+          command: `curl -s ${updateUrlBase}/update.json | grep '"version":"${releaseVersion}"'`,
         });
         if (jsonResult.exit_code !== 0) {
           throw new Error('update.json verification failed - version mismatch');
@@ -444,7 +457,7 @@ export function ServerMonitor() {
 
         // Verify installer is accessible
         const exeResult = await invoke<CommandResult>('execute_ssh_command', {
-          command: `curl -s -o /dev/null -w "%{http_code}" https://YOUR_DOMAIN/atlas/Atlas_${releaseVersion}_x64-setup.exe`,
+          command: `curl -s -o /dev/null -w "%{http_code}" ${updateUrlBase}/Atlas_${releaseVersion}_x64-setup.exe`,
         });
         if (exeResult.output.trim() !== '200') {
           throw new Error(`Installer not accessible - HTTP ${exeResult.output.trim()}`);
@@ -631,7 +644,7 @@ export function ServerMonitor() {
                     <Rocket size={18} className="text-purple-400" />
                     <h2 className="card-title mb-0">Update Release</h2>
                   </div>
-                  {!showUpdateRelease && atlasProjectPath && (
+                  {!showUpdateRelease && atlasProjectPath && remoteUpdatePath && updateUrlBase && (
                     <button
                       onClick={() => setShowUpdateRelease(true)}
                       disabled={releaseStep !== 'idle' && releaseStep !== 'completed' && releaseStep !== 'failed'}
@@ -643,15 +656,22 @@ export function ServerMonitor() {
                   )}
                 </div>
 
-                {/* Warning if project path not configured */}
-                {!atlasProjectPath && (
-                  <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center gap-2 text-amber-400 text-sm">
-                    <AlertCircle size={16} />
-                    <span>Configure Atlas Project Path in Settings to enable deployments.</span>
+                {/* Warning if paths not configured */}
+                {(!atlasProjectPath || !remoteUpdatePath || !updateUrlBase) && (
+                  <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-start gap-2 text-amber-400 text-sm">
+                    <AlertCircle size={16} className="mt-0.5 flex-shrink-0" />
+                    <div>
+                      <span>Configure the following in Settings to enable deployments:</span>
+                      <ul className="list-disc list-inside mt-1 text-xs">
+                        {!atlasProjectPath && <li>Atlas Project Path</li>}
+                        {!remoteUpdatePath && <li>Remote Update Path</li>}
+                        {!updateUrlBase && <li>Update URL Base</li>}
+                      </ul>
+                    </div>
                   </div>
                 )}
 
-                {showUpdateRelease && atlasProjectPath && (
+                {showUpdateRelease && atlasProjectPath && remoteUpdatePath && updateUrlBase && (
                   <div className="space-y-3">
                     {/* Version Input */}
                     <div>

@@ -19,6 +19,8 @@ export interface Settings {
   max_concurrent_ml_jobs: number;
   valorant_credentials: ValorantCredentials | null;
   atlas_project_path: string | null;
+  remote_update_path: string | null;
+  update_url_base: string | null;
 }
 
 export interface UpdateSettingsParams {
@@ -28,4 +30,6 @@ export interface UpdateSettingsParams {
   max_concurrent_ml_jobs?: number;
   valorant_credentials?: ValorantCredentialsInput | null;
   atlas_project_path?: string;
+  remote_update_path?: string;
+  update_url_base?: string;
 }
