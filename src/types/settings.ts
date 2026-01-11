@@ -1,0 +1,31 @@
+// Settings types
+
+export interface ValorantCredentials {
+  username: string;
+  region: string;
+  has_credentials: boolean; // true if credentials are set
+}
+
+export interface ValorantCredentialsInput {
+  username: string;
+  password: string;
+  region: string;
+}
+
+export interface Settings {
+  download_path: string;
+  default_quality: string;
+  max_concurrent_downloads: number;
+  max_concurrent_ml_jobs: number;
+  valorant_credentials: ValorantCredentials | null;
+  atlas_project_path: string | null;
+}
+
+export interface UpdateSettingsParams {
+  download_path?: string;
+  default_quality?: string;
+  max_concurrent_downloads?: number;
+  max_concurrent_ml_jobs?: number;
+  valorant_credentials?: ValorantCredentialsInput | null;
+  atlas_project_path?: string;
+}

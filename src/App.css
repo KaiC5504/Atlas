@@ -1,0 +1,353 @@
+/* Atlas Design System CSS */
+@import "tailwindcss";
+
+/* ===== Custom Theme Configuration ===== */
+@theme {
+  /* Colors */
+  --color-surface-base: #0a0a0f;
+  --color-surface-elevated: #12121a;
+
+  --color-glass-bg: rgba(255, 255, 255, 0.05);
+  --color-glass-bg-hover: rgba(255, 255, 255, 0.08);
+  --color-glass-border: rgba(255, 255, 255, 0.1);
+  --color-glass-border-hover: rgba(255, 255, 255, 0.15);
+
+  --color-accent-primary: #6366f1;
+  --color-accent-primary-hover: #818cf8;
+  --color-accent-secondary: #8b5cf6;
+
+  --color-text-primary: rgba(255, 255, 255, 0.95);
+  --color-text-secondary: rgba(255, 255, 255, 0.7);
+  --color-text-muted: rgba(255, 255, 255, 0.5);
+
+  --color-status-success: #22c55e;
+  --color-status-error: #ef4444;
+  --color-status-warning: #f59e0b;
+  --color-status-info: #3b82f6;
+  --color-status-pending: #a855f7;
+
+  /* Shadows */
+  --shadow-glass: 0 8px 32px rgba(0, 0, 0, 0.3);
+  --shadow-glow: 0 0 20px rgba(99, 102, 241, 0.3);
+
+  /* Animation */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* ===== Base Styles ===== */
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  font-weight: 400;
+  color: var(--color-text-primary);
+  background: var(--color-surface-base);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ===== Scrollbar Styling ===== */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* ===== Glass Effect Utilities ===== */
+@utility glass {
+  background: var(--color-glass-bg);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--color-glass-border);
+}
+
+@utility glass-elevated {
+  background: var(--color-glass-bg-hover);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: var(--shadow-glass);
+}
+
+@utility glass-subtle {
+  background: rgba(255, 255, 255, 0.03);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+@utility glass-hover {
+  &:hover {
+    background: var(--color-glass-bg-hover);
+    border-color: var(--color-glass-border-hover);
+  }
+}
+
+/* Backdrop filter fix for release builds - ensures both prefixed and standard properties survive minification */
+.glass,
+.glass-elevated,
+.glass-subtle {
+  -webkit-backdrop-filter: var(--glass-blur, blur(12px));
+  backdrop-filter: var(--glass-blur, blur(12px));
+}
+
+.glass {
+  --glass-blur: blur(12px);
+}
+
+.glass-elevated {
+  --glass-blur: blur(16px);
+}
+
+.glass-subtle {
+  --glass-blur: blur(8px);
+}
+
+/* ===== Progress Bar Gradient ===== */
+@utility progress-gradient {
+  background: linear-gradient(90deg, var(--color-accent-primary), var(--color-accent-secondary));
+}
+
+/* ===== Glow Effects ===== */
+@utility glow-accent {
+  box-shadow: var(--shadow-glow);
+}
+
+/* ===== Animation Utilities ===== */
+@utility animate-shimmer {
+  animation: shimmer 2s infinite linear;
+}
+
+@utility animate-pulse-slow {
+  animation: pulse-slow 3s infinite ease-in-out;
+}
+
+@utility animate-fade-in {
+  animation: fade-in 0.3s ease-out;
+}
+
+@utility animate-slide-up {
+  animation: slide-up 0.3s ease-out;
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes pulse-slow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ===== Custom Component Classes ===== */
+
+/* Status Badges */
+.badge {
+  @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium;
+}
+
+.badge-success {
+  @apply bg-green-500/20 text-green-400 border border-green-500/30;
+}
+
+.badge-error {
+  @apply bg-red-500/20 text-red-400 border border-red-500/30;
+}
+
+.badge-warning {
+  @apply bg-amber-500/20 text-amber-400 border border-amber-500/30;
+}
+
+.badge-info {
+  @apply bg-blue-500/20 text-blue-400 border border-blue-500/30;
+}
+
+.badge-pending {
+  @apply bg-purple-500/20 text-purple-400 border border-purple-500/30;
+}
+
+.badge-default {
+  @apply bg-white/10 text-white/70 border border-white/20;
+}
+
+/* Buttons */
+.btn {
+  @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium
+         transition-all duration-200 ease-out
+         disabled:opacity-50 disabled:cursor-not-allowed;
+}
+
+.btn-primary {
+  @apply bg-accent-primary text-white
+         hover:bg-accent-primary-hover hover:shadow-lg
+         active:scale-[0.98];
+}
+
+.btn-secondary {
+  @apply glass glass-hover text-text-primary
+         hover:text-white
+         active:scale-[0.98];
+}
+
+.btn-ghost {
+  @apply bg-transparent text-text-secondary
+         hover:bg-white/5 hover:text-white
+         active:scale-[0.98];
+}
+
+.btn-danger {
+  @apply bg-red-500/20 text-red-400 border border-red-500/30
+         hover:bg-red-500/30 hover:text-red-300
+         active:scale-[0.98];
+}
+
+.btn-sm {
+  @apply px-3 py-1.5 text-sm;
+}
+
+.btn-lg {
+  @apply px-6 py-3 text-lg;
+}
+
+/* Form Inputs */
+.input {
+  @apply w-full px-3 py-2 rounded-lg
+         glass-subtle
+         text-text-primary placeholder:text-text-muted
+         outline-none
+         transition-all duration-200
+         focus:ring-2 focus:ring-accent-primary/30 focus:border-accent-primary/50;
+}
+
+.select {
+  @apply w-full px-3 py-2 rounded-lg
+         glass-subtle
+         text-text-primary
+         outline-none cursor-pointer
+         transition-all duration-200
+         focus:ring-2 focus:ring-accent-primary/30 focus:border-accent-primary/50;
+}
+
+.select option {
+  @apply bg-surface-elevated text-white;
+}
+
+/* Cards */
+.card {
+  @apply glass-elevated rounded-xl p-4;
+}
+
+.card-header {
+  @apply flex items-center justify-between mb-4;
+}
+
+.card-title {
+  @apply text-lg font-semibold text-white;
+}
+
+/* Section Titles */
+.section-title {
+  @apply text-2xl font-bold text-white mb-6;
+}
+
+.section-subtitle {
+  @apply text-sm text-text-muted uppercase tracking-wider mb-2;
+}
+
+/* Progress Bar */
+.progress-bar {
+  @apply h-2 rounded-full bg-white/10 overflow-hidden;
+}
+
+.progress-bar-fill {
+  @apply h-full rounded-full progress-gradient transition-all duration-300;
+}
+
+/* Sidebar specific */
+.nav-item {
+  @apply flex items-center gap-3 px-3 py-2.5 rounded-lg
+         text-text-secondary
+         transition-all duration-200
+         hover:bg-white/5 hover:text-white;
+}
+
+.nav-item-active {
+  @apply bg-accent-primary/20 text-white border-l-2 border-accent-primary;
+}
+
+/* Empty state */
+.empty-state {
+  @apply flex flex-col items-center justify-center py-12 text-center;
+}
+
+.empty-state-icon {
+  @apply w-16 h-16 text-text-muted mb-4 opacity-50;
+}
+
+.empty-state-title {
+  @apply text-lg font-medium text-text-secondary mb-2;
+}
+
+.empty-state-description {
+  @apply text-sm text-text-muted max-w-sm;
+}
+
+/* Loading state */
+.loading-spinner {
+  @apply w-5 h-5 border-2 border-white/20 border-t-accent-primary rounded-full animate-spin;
+}
+
+/* Table-like list items */
+.list-item {
+  @apply glass rounded-lg p-4 mb-3
+         transition-all duration-200
+         hover:bg-glass-bg-hover;
+}
+
+/* Tooltip (basic) */
+.tooltip {
+  @apply absolute z-50 px-2 py-1 text-xs text-white bg-gray-900 rounded shadow-lg
+         opacity-0 invisible transition-all duration-200;
+}
+
+.tooltip-trigger:hover .tooltip {
+  @apply opacity-100 visible;
+}

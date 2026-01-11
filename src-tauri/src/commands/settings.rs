@@ -1,0 +1,67 @@
+// Settings command handlers - real implementation with file storage
+use crate::file_manager::{read_json_file, write_json_file};
+use crate::models::Settings;
+use crate::utils::get_settings_json_path;
+use serde::Deserialize;
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateSettingsParams {
+    pub download_path: Option<String>,
+    pub default_quality: Option<String>,
+    pub max_concurrent_downloads: Option<u32>,
+    pub max_concurrent_ml_jobs: Option<u32>,
+    pub atlas_project_path: Option<String>,
+}
+
+/// Get current settings from the JSON file
+#[tauri::command]
+pub fn get_settings() -> Result<Settings, String> {
+    let path = get_settings_json_path();
+
+    if !path.exists() {
+        return Ok(Settings::default());
+    }
+
+    read_json_file(&path)
+}
+
+/// Update settings with partial update support
+#[tauri::command]
+pub fn update_settings(settings: UpdateSettingsParams) -> Result<Settings, String> {
+    let path = get_settings_json_path();
+
+    // Read current settings or use defaults
+    let mut current_settings: Settings = if path.exists() {
+        read_json_file(&path)?
+    } else {
+        Settings::default()
+    };
+
+    // Apply partial updates
+    if let Some(download_path) = settings.download_path {
+        current_settings.download_path = download_path;
+    }
+    if let Some(default_quality) = settings.default_quality {
+        current_settings.default_quality = default_quality;
+    }
+    if let Some(max_concurrent_downloads) = settings.max_concurrent_downloads {
+        current_settings.max_concurrent_downloads = max_concurrent_downloads;
+    }
+    if let Some(max_concurrent_ml_jobs) = settings.max_concurrent_ml_jobs {
+        current_settings.max_concurrent_ml_jobs = max_concurrent_ml_jobs;
+    }
+    if let Some(atlas_project_path) = settings.atlas_project_path {
+        current_settings.atlas_project_path = if atlas_project_path.is_empty() {
+            None
+        } else {
+            Some(atlas_project_path)
+        };
+    }
+
+    // Write back to file
+    write_json_file(&path, &current_settings)?;
+
+    println!("Updated settings: {:?}", current_settings);
+
+    Ok(current_settings)
+}

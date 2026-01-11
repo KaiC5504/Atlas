@@ -1,0 +1,33 @@
+# Training configuration for audio event detection
+
+# Data paths
+data_dir: "./dataset"  # Path to prepared dataset
+
+# Training hyperparameters
+# Optimized for RTX 4070 (12GB VRAM)
+batch_size: 128          # Increased for RTX 4070 (was 32)
+learning_rate: 0.001
+weight_decay: 0.01
+epochs: 100
+early_stopping_patience: 10
+
+# Data augmentation
+augmentation:
+  time_mask_max_width: 5       # Max frames to mask in time dimension
+  freq_mask_max_width: 10      # Max bins to mask in frequency dimension
+  gain_range: [-3, 3]          # Random gain adjustment in dB
+  mixup_alpha: 0.2             # Mixup interpolation strength
+
+# Model architecture
+model:
+  architecture: "cnn_v1"       # "cnn_v1" or "cnn_v2"
+
+# Class weights (adjust based on dataset balance)
+# Higher positive weight helps with imbalanced datasets
+class_weights:
+  positive: 1.0
+  negative: 1.0
+
+# Output settings
+output_dir: "./trained_models"
+export_onnx: true
