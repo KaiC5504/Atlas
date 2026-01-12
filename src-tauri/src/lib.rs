@@ -2,6 +2,7 @@
 mod commands;
 mod file_manager;
 mod gaming;
+mod launcher;
 mod models;
 mod performance;
 mod process_manager;
@@ -22,6 +23,11 @@ use commands::{
         remove_game_from_whitelist, start_gaming_detection, stop_gaming_detection,
         toggle_game_enabled, update_bottleneck_thresholds, update_game_whitelist,
     },
+    launcher::{
+        add_detected_games, add_manual_game, get_game_library, get_icon_base64, is_playtime_tracking,
+        launch_game, refresh_game_icons, remove_game_from_library, scan_for_games, start_playtime_tracking,
+        stop_playtime_tracking,
+    },
     ml_jobs::{cancel_ml_job, delete_ml_job, get_available_models, list_ml_jobs, start_ml_job, submit_ml_job},
     performance::{
         get_performance_snapshot, has_nvidia_gpu, is_performance_monitoring,
@@ -39,15 +45,16 @@ use commands::{
 };
 use file_manager::initialize_json_file;
 use gaming::{BottleneckAnalyzer, GameDetectionState, GamingSessionManager};
-use models::{BottleneckThresholds, GameWhitelist, GamingSession, QuickActionsConfig, ServerConfig, Settings};
+use launcher::PlaytimeTrackerState;
+use models::{BottleneckThresholds, GameLibrary, GameWhitelist, GamingSession, QuickActionsConfig, ServerConfig, Settings};
 use performance::{MonitoringState, SharedMetrics};
 use std::sync::Arc;
 use tauri::Manager;
 use utils::{
     get_audio_detection_jobs_json_path, get_bottleneck_thresholds_json_path, get_downloads_json_path,
-    get_game_whitelist_json_path, get_gaming_sessions_json_path, get_ml_jobs_json_path,
-    get_quick_actions_json_path, get_server_config_json_path, get_settings_json_path,
-    get_valorant_store_json_path, initialize_data_directories,
+    get_game_library_json_path, get_game_whitelist_json_path, get_gaming_sessions_json_path,
+    get_ml_jobs_json_path, get_quick_actions_json_path, get_server_config_json_path,
+    get_settings_json_path, get_valorant_store_json_path, initialize_data_directories,
 };
 
 fn initialize_app_data() -> Result<(), String> {
@@ -72,6 +79,9 @@ fn initialize_app_data() -> Result<(), String> {
     initialize_json_file(&get_gaming_sessions_json_path(), &Vec::<GamingSession>::new())?;
     initialize_json_file(&get_bottleneck_thresholds_json_path(), &BottleneckThresholds::default())?;
 
+    // Game launcher files
+    initialize_json_file(&get_game_library_json_path(), &GameLibrary::new())?;
+
     println!("App data initialized successfully");
     Ok(())
 }
@@ -85,6 +95,7 @@ pub fn run() {
     let detection_state = Arc::new(GameDetectionState::default());
     let bottleneck_analyzer = Arc::new(BottleneckAnalyzer::new());
     let shared_metrics = Arc::new(SharedMetrics::new());
+    let playtime_tracker_state = Arc::new(PlaytimeTrackerState::new());
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -94,6 +105,7 @@ pub fn run() {
         .manage(detection_state.clone())
         .manage(bottleneck_analyzer.clone())
         .manage(shared_metrics.clone())
+        .manage(playtime_tracker_state.clone())
         .setup(move |app| {
             let session_manager = Arc::new(GamingSessionManager::new(
                 app.handle().clone(),
@@ -181,6 +193,18 @@ pub fn run() {
             check_for_update,
             download_and_install_update,
             get_current_version,
+            // Game launcher commands
+            get_game_library,
+            scan_for_games,
+            add_detected_games,
+            add_manual_game,
+            remove_game_from_library,
+            launch_game,
+            start_playtime_tracking,
+            stop_playtime_tracking,
+            is_playtime_tracking,
+            get_icon_base64,
+            refresh_game_icons,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

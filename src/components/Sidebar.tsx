@@ -10,6 +10,7 @@ import {
   Server,
   Activity,
   Gauge,
+  Library,
   Settings,
   ChevronLeft,
   ChevronRight,
@@ -84,6 +85,12 @@ export function Sidebar() {
           to="/gaming"
           label="Gaming"
           icon={Gauge}
+          collapsed={collapsed}
+        />
+        <NavigationItem
+          to="/launcher"
+          label="Library"
+          icon={Library}
           collapsed={collapsed}
         />
         <NavigationItem

@@ -3,6 +3,7 @@ pub mod audio_detection;
 pub mod auth;
 pub mod downloads;
 pub mod gaming;
+pub mod launcher;
 pub mod ml_jobs;
 pub mod performance;
 pub mod server;

@@ -10,6 +10,7 @@ import { ValorantTracker } from './views/ValorantTracker';
 import { ServerMonitor } from './views/ServerMonitor';
 import PerformanceMonitor from './views/PerformanceMonitor';
 import GamingPerformance from './views/GamingPerformance';
+import GameLauncher from './views/GameLauncher';
 import { Settings } from './views/Settings';
 import { useUpdater } from './hooks';
 import './App.css';
@@ -48,6 +49,7 @@ function App() {
           <Route path="/server" element={<ServerMonitor />} />
           <Route path="/performance" element={<PerformanceMonitor />} />
           <Route path="/gaming" element={<GamingPerformance />} />
+          <Route path="/launcher" element={<GameLauncher />} />
           <Route path="/settings" element={<Settings />} />
         </Routes>
       </main>

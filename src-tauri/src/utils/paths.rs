@@ -105,6 +105,10 @@ pub fn get_bottleneck_thresholds_json_path() -> PathBuf {
     get_data_dir().join("bottleneck_thresholds.json")
 }
 
+pub fn get_game_library_json_path() -> PathBuf {
+    get_data_dir().join("game_library.json")
+}
+
 /// Creates the directory structure if it doesn't exist
 pub fn initialize_data_directories() -> Result<(), String> {
     let directories = [
