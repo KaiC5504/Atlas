@@ -12,7 +12,12 @@ media tools, and server access — into a single Tauri-based app.
 This project evolves as my needs change. It is not intended to be a general-
 purpose product.
 
-## Tech
+<div align="center">
+    
+# Tech
+
+</div>
+
 - React + Vite (frontend)
 - Tauri (Rust backend)
 - Python workers for utilities and ML
