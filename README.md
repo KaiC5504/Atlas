@@ -2,6 +2,8 @@
 
 # Atlas
 
+</div>
+
 Atlas is a personal, local-first desktop application I built for myself.
 
 It combines the tools I regularly use — system monitoring, gaming utilities,
@@ -14,5 +16,3 @@ purpose product.
 - React + Vite (frontend)
 - Tauri (Rust backend)
 - Python workers for utilities and ML
-
-</div>
