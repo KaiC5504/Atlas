@@ -24,9 +24,8 @@ use commands::{
         toggle_game_enabled, update_bottleneck_thresholds, update_game_whitelist,
     },
     launcher::{
-        add_detected_games, add_manual_game, get_game_library, get_icon_base64, is_playtime_tracking,
-        launch_game, refresh_game_icons, remove_game_from_library, scan_for_games, start_playtime_tracking,
-        stop_playtime_tracking,
+        add_detected_games, add_manual_game, get_game_library, get_icon_base64,
+        launch_game, remove_game_from_library, scan_for_games,
     },
     ml_jobs::{cancel_ml_job, delete_ml_job, get_available_models, list_ml_jobs, start_ml_job, submit_ml_job},
     performance::{
@@ -200,11 +199,7 @@ pub fn run() {
             add_manual_game,
             remove_game_from_library,
             launch_game,
-            start_playtime_tracking,
-            stop_playtime_tracking,
-            is_playtime_tracking,
             get_icon_base64,
-            refresh_game_icons,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -9,8 +9,6 @@ export interface UseGameLauncherReturn {
   library: GameLibrary;
   isLoading: boolean;
   isScanning: boolean;
-  isRefreshingIcons: boolean;
-  isTrackingPlaytime: boolean;
   error: string | null;
   loadLibrary: () => Promise<void>;
   scanForGames: () => Promise<DetectedGame[]>;
@@ -18,9 +16,6 @@ export interface UseGameLauncherReturn {
   addManualGame: (request: AddGameRequest) => Promise<void>;
   removeGame: (gameId: string) => Promise<void>;
   launchGame: (gameId: string) => Promise<void>;
-  refreshIcons: () => Promise<void>;
-  startPlaytimeTracking: () => Promise<void>;
-  stopPlaytimeTracking: () => Promise<void>;
   getGameById: (gameId: string) => LibraryGame | undefined;
 }
 
@@ -28,8 +23,6 @@ export function useGameLauncher(): UseGameLauncherReturn {
   const [library, setLibrary] = useState<GameLibrary>({ games: [] });
   const [isLoading, setIsLoading] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
-  const [isRefreshingIcons, setIsRefreshingIcons] = useState(false);
-  const [isTrackingPlaytime, setIsTrackingPlaytime] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const loadLibrary = useCallback(async () => {
@@ -100,39 +93,6 @@ export function useGameLauncher(): UseGameLauncherReturn {
     }
   }, [loadLibrary]);
 
-  const startPlaytimeTracking = useCallback(async () => {
-    setError(null);
-    try {
-      await invoke('start_playtime_tracking');
-      setIsTrackingPlaytime(true);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    }
-  }, []);
-
-  const stopPlaytimeTracking = useCallback(async () => {
-    setError(null);
-    try {
-      await invoke('stop_playtime_tracking');
-      setIsTrackingPlaytime(false);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    }
-  }, []);
-
-  const refreshIcons = useCallback(async () => {
-    setIsRefreshingIcons(true);
-    setError(null);
-    try {
-      const lib = await invoke<GameLibrary>('refresh_game_icons');
-      setLibrary(lib);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setIsRefreshingIcons(false);
-    }
-  }, []);
-
   const getGameById = useCallback((gameId: string): LibraryGame | undefined => {
     return library.games.find(g => g.id === gameId);
   }, [library]);
@@ -141,11 +101,6 @@ export function useGameLauncher(): UseGameLauncherReturn {
   useEffect(() => {
     loadLibrary();
   }, [loadLibrary]);
-
-  // Check if playtime tracking is running
-  useEffect(() => {
-    invoke<boolean>('is_playtime_tracking').then(setIsTrackingPlaytime).catch(() => {});
-  }, []);
 
   // Listen for game events
   useEffect(() => {
@@ -167,8 +122,6 @@ export function useGameLauncher(): UseGameLauncherReturn {
     library,
     isLoading,
     isScanning,
-    isRefreshingIcons,
-    isTrackingPlaytime,
     error,
     loadLibrary,
     scanForGames,
@@ -176,9 +129,6 @@ export function useGameLauncher(): UseGameLauncherReturn {
     addManualGame,
     removeGame,
     launchGame,
-    refreshIcons,
-    startPlaytimeTracking,
-    stopPlaytimeTracking,
     getGameById,
   };
 }

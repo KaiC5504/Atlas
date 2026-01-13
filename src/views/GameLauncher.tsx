@@ -10,9 +10,7 @@ import {
   Loader2,
   AlertCircle,
   Gamepad2,
-  Clock,
   CheckCircle,
-  ImageIcon,
 } from 'lucide-react';
 import { useGameLauncher } from '../hooks/useGameLauncher';
 import { GameCard, GameDetailPanel, AddGameModal } from '../components/launcher';
@@ -23,8 +21,6 @@ export default function GameLauncher() {
     library,
     isLoading,
     isScanning,
-    isRefreshingIcons,
-    isTrackingPlaytime,
     error,
     loadLibrary,
     scanForGames,
@@ -32,9 +28,6 @@ export default function GameLauncher() {
     addManualGame,
     removeGame,
     launchGame,
-    refreshIcons,
-    startPlaytimeTracking,
-    stopPlaytimeTracking,
   } = useGameLauncher();
 
   // Modal state
@@ -105,22 +98,6 @@ export default function GameLauncher() {
         </div>
 
         <div className="flex items-center gap-3">
-          {/* Playtime Tracking Toggle */}
-          <button
-            onClick={isTrackingPlaytime ? stopPlaytimeTracking : startPlaytimeTracking}
-            className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
-              isTrackingPlaytime
-                ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                : 'bg-white/10 text-muted hover:bg-white/20'
-            }`}
-            title={isTrackingPlaytime ? 'Stop tracking playtime' : 'Start tracking playtime'}
-          >
-            <Clock className="w-4 h-4" />
-            <span className="text-sm">
-              {isTrackingPlaytime ? 'Tracking' : 'Track Time'}
-            </span>
-          </button>
-
           {/* Scan Button */}
           <button
             onClick={handleScan}
@@ -142,20 +119,6 @@ export default function GameLauncher() {
           >
             <Plus className="w-4 h-4" />
             <span>Add Game</span>
-          </button>
-
-          {/* Refresh Icons Button */}
-          <button
-            onClick={refreshIcons}
-            disabled={isRefreshingIcons || library.games.length === 0}
-            className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-secondary transition-colors disabled:opacity-50"
-            title="Refresh HD icons"
-          >
-            {isRefreshingIcons ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <ImageIcon className="w-4 h-4" />
-            )}
           </button>
 
           {/* Refresh Button */}

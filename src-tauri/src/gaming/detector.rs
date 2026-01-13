@@ -1,6 +1,3 @@
-// Game detection module
-// Monitors running processes against the game whitelist
-
 use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -12,6 +9,7 @@ use tauri::{AppHandle, Emitter};
 
 use crate::file_manager::read_json_file;
 use crate::models::gaming::GameWhitelist;
+use crate::performance::{stop_monitoring, MonitoringState};
 use crate::utils::get_game_whitelist_json_path;
 use super::session::GamingSessionManager;
 
@@ -35,11 +33,11 @@ fn load_game_whitelist() -> GameWhitelist {
 }
 
 /// Start game detection in a background thread
-/// Monitors running processes against the whitelist every 5 seconds
 pub fn start_game_detection(
     app: AppHandle,
     detection_state: Arc<GameDetectionState>,
     session_manager: Arc<GamingSessionManager>,
+    monitoring_state: Arc<MonitoringState>,
 ) {
     let is_running = detection_state.is_running.clone();
 
@@ -51,68 +49,108 @@ pub fn start_game_detection(
 
     println!("Starting game detection...");
 
+    let monitoring_state = monitoring_state.clone();
+
     thread::spawn(move || {
         let mut system = System::new();
-        let mut detected_games: HashSet<String> = HashSet::new();
 
-        while is_running.load(Ordering::SeqCst) {
-            // Refresh process list
+        let detected_game = loop {
+            if !is_running.load(Ordering::SeqCst) {
+                println!("Game detection stopped before finding a game");
+                return;
+            }
+
             system.refresh_processes_specifics(ProcessRefreshKind::new());
 
-            // Load current whitelist (allows hot-reloading)
-            let whitelist = load_game_whitelist();
-            let enabled_games: Vec<_> = whitelist
-                .games
-                .iter()
-                .filter(|g| g.enabled)
+            let running_processes: HashSet<String> = system
+                .processes()
+                .values()
+                .map(|p| {
+                    p.name()
+                        .to_string()
+                        .trim_end_matches(".exe")
+                        .trim_end_matches(".EXE")
+                        .to_lowercase()
+                })
                 .collect();
 
-            // Check for game processes
-            let mut current_games: HashSet<String> = HashSet::new();
+            let whitelist = load_game_whitelist();
 
-            for process in system.processes().values() {
-                let process_name = process.name().to_string();
+            let mut found_game: Option<(String, String)> = None;
 
-                // Check if this process matches any game in the whitelist
-                // Note: sysinfo 0.30+ returns process names WITHOUT .exe on Windows
-                // so we strip .exe from whitelist entries for comparison
-                if let Some(game) = enabled_games.iter().find(|g| {
-                    let whitelist_name = g.process_name
-                        .trim_end_matches(".exe")
-                        .trim_end_matches(".EXE")
-                        .to_lowercase();
-                    let running_name = process_name
-                        .trim_end_matches(".exe")
-                        .trim_end_matches(".EXE")
-                        .to_lowercase();
-                    whitelist_name == running_name
-                }) {
-                    current_games.insert(process_name.clone());
+            for game in whitelist.games.iter().filter(|g| g.enabled) {
+                let whitelist_name = game.process_name
+                    .trim_end_matches(".exe")
+                    .trim_end_matches(".EXE")
+                    .to_lowercase();
 
-                    // New game detected
-                    if !detected_games.contains(&process_name) {
-                        println!("Game detected: {} ({})", game.name, process_name);
-
-                        match session_manager.start_session(&game.name, &process_name) {
-                            Ok(session) => {
-                                if let Err(e) = app.emit("gaming:session_started", json!({ "session": session })) {
-                                    eprintln!("Failed to emit session_started event: {}", e);
-                                }
-                            }
-                            Err(e) => {
-                                eprintln!("Failed to start session for {}: {}", game.name, e);
-                            }
-                        }
-                    }
+                if running_processes.contains(&whitelist_name) {
+                    found_game = Some((game.name.clone(), game.process_name.clone()));
+                    println!("Matched game: {} (process: {})", game.name, game.process_name);
+                    break;
                 }
             }
 
-            // Check for games that stopped
-            for process_name in detected_games.difference(&current_games) {
-                println!("Game stopped: {}", process_name);
+            if let Some(game) = found_game {
+                break game;
+            }
 
-                match session_manager.end_session_by_process(process_name) {
+            thread::sleep(Duration::from_secs(3));
+        };
+
+        let (game_name, process_name) = detected_game;
+        println!("Game detected: {} ({}) - stopping detection polling", game_name, process_name);
+
+        match session_manager.start_session(&game_name, &process_name) {
+            Ok(session) => {
+                if let Err(e) = app.emit("gaming:session_started", json!({ "session": session })) {
+                    eprintln!("Failed to emit session_started event: {}", e);
+                }
+            }
+            Err(e) => {
+                eprintln!("Failed to start session for {}: {}", game_name, e);
+                is_running.store(false, Ordering::SeqCst);
+                return;
+            }
+        }
+
+        is_running.store(false, Ordering::SeqCst);
+        if let Err(e) = app.emit("gaming:detection_stopped", json!({ "reason": "game_detected" })) {
+            eprintln!("Failed to emit detection_stopped event: {}", e);
+        }
+        println!("Detection turned off after game detected");
+
+        let process_name_lower = process_name
+            .trim_end_matches(".exe")
+            .trim_end_matches(".EXE")
+            .to_lowercase();
+
+        println!("Phase 2: Monitoring for process exit: {}", process_name_lower);
+
+        let mut check_interval = 5u64;
+        const MAX_INTERVAL: u64 = 30;
+
+        loop {
+            thread::sleep(Duration::from_secs(check_interval));
+
+            system.refresh_processes_specifics(ProcessRefreshKind::new());
+
+            let still_running = system.processes().values().any(|p| {
+                let name = p.name()
+                    .to_string()
+                    .trim_end_matches(".exe")
+                    .trim_end_matches(".EXE")
+                    .to_lowercase();
+                name == process_name_lower
+            });
+
+            if !still_running {
+                println!("Game process exited: {}", process_name);
+
+                // End the gaming session
+                match session_manager.end_session_by_process(&process_name) {
                     Ok(session) => {
+                        println!("Gaming session ended successfully");
                         if let Err(e) = app.emit("gaming:session_ended", json!({ "session": session })) {
                             eprintln!("Failed to emit session_ended event: {}", e);
                         }
@@ -121,15 +159,23 @@ pub fn start_game_detection(
                         eprintln!("Failed to end session for {}: {}", process_name, e);
                     }
                 }
+
+                println!("Stopping performance monitoring...");
+                stop_monitoring(monitoring_state);
+                println!("Performance monitoring stop signal sent");
+
+                if let Err(e) = app.emit("performance:monitoring_stopped", json!({ "reason": "game_closed" })) {
+                    eprintln!("Failed to emit monitoring_stopped event: {}", e);
+                }
+
+                break;
             }
 
-            detected_games = current_games;
-
-            // Check every 5 seconds
-            thread::sleep(Duration::from_secs(5));
+            // Exponential backoff - reduces CPU usage for long gaming sessions
+            check_interval = (check_interval * 2).min(MAX_INTERVAL);
         }
 
-        println!("Game detection stopped");
+        println!("Game session monitoring thread exiting");
     });
 }
 

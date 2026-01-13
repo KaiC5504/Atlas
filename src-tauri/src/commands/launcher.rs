@@ -3,14 +3,13 @@
 use crate::file_manager::{read_json_file, write_json_file};
 use crate::launcher::{
     detect_hoyoplay_games, detect_steam_games,
-    playtime_tracker::{start_playtime_tracker, stop_playtime_tracker, PlaytimeTrackerState},
-    download_steam_icon, extract_icon_from_exe, get_icon_cache_dir,
+    playtime_tracker::{start_game_session, PlaytimeTrackerState},
 };
 use crate::models::{AddGameRequest, DetectedGame, GameEntry, GameLibrary, GameSource, GameWhitelist, LibraryGame};
 use crate::utils::{get_game_library_json_path, get_game_whitelist_json_path};
 use std::path::Path;
 use std::sync::Arc;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, State, Emitter};
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 
 /// Read an icon file and return as base64 data URL
@@ -197,7 +196,11 @@ pub fn remove_game_from_library(game_id: String) -> Result<GameLibrary, String> 
 
 /// Launch a game
 #[tauri::command]
-pub fn launch_game(game_id: String) -> Result<(), String> {
+pub fn launch_game(
+    app_handle: AppHandle,
+    game_id: String,
+    playtime_state: State<'_, Arc<PlaytimeTrackerState>>,
+) -> Result<(), String> {
     let mut library: GameLibrary = read_json_file(&get_game_library_json_path())
         .map_err(|e| format!("Failed to read game library: {}", e))?;
 
@@ -206,6 +209,8 @@ pub fn launch_game(game_id: String) -> Result<(), String> {
         .ok_or_else(|| "Game not found".to_string())?;
 
     let exe_path = game.executable_path.clone();
+    let process_name = game.process_name.clone();
+    let game_id_clone = game_id.clone();
 
     // Update last played
     if let Some(game_mut) = library.find_by_id_mut(&game_id) {
@@ -213,89 +218,74 @@ pub fn launch_game(game_id: String) -> Result<(), String> {
     }
     let _ = write_json_file(&get_game_library_json_path(), &library);
 
-    // Launch the game using cmd /C start
-    #[cfg(windows)]
-    {
-        std::process::Command::new("cmd")
-            .args(["/C", "start", "", &exe_path])
-            .spawn()
-            .map_err(|e| format!("Failed to launch game: {}", e))?;
+    launch_process_silent(&exe_path)?;
+
+    start_game_session(
+        app_handle.clone(),
+        playtime_state.inner().clone(),
+        game_id_clone,
+        process_name,
+    );
+
+    let _ = app_handle.emit("launcher:navigate_to_gaming", ());
+
+    Ok(())
+}
+
+#[cfg(windows)]
+fn launch_process_silent(exe_path: &str) -> Result<(), String> {
+    use std::ffi::OsStr;
+    use std::os::windows::ffi::OsStrExt;
+    use std::ptr::null_mut;
+    use windows_sys::Win32::UI::Shell::ShellExecuteW;
+    use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+
+    fn to_wide(s: &str) -> Vec<u16> {
+        OsStr::new(s).encode_wide().chain(std::iter::once(0)).collect()
     }
 
-    #[cfg(not(windows))]
-    {
-        std::process::Command::new(&exe_path)
-            .spawn()
-            .map_err(|e| format!("Failed to launch game: {}", e))?;
-    }
+    let operation = to_wide("open");
+    let file = to_wide(exe_path);
 
-    Ok(())
-}
+    let result = unsafe {
+        ShellExecuteW(
+            null_mut(),           
+            operation.as_ptr(),   
+            file.as_ptr(),       
+            null_mut(),           
+            null_mut(),           
+            SW_SHOWNORMAL as i32, 
+        )
+    };
 
-/// Start playtime tracking
-#[tauri::command]
-pub fn start_playtime_tracking(
-    app_handle: AppHandle,
-    state: State<'_, Arc<PlaytimeTrackerState>>,
-) -> Result<(), String> {
-    start_playtime_tracker(app_handle, state.inner().clone());
-    Ok(())
-}
-
-/// Stop playtime tracking
-#[tauri::command]
-pub fn stop_playtime_tracking(
-    state: State<'_, Arc<PlaytimeTrackerState>>,
-) -> Result<(), String> {
-    stop_playtime_tracker(state.inner().clone());
-    Ok(())
-}
-
-/// Check if playtime tracking is running
-#[tauri::command]
-pub fn is_playtime_tracking(
-    state: State<'_, Arc<PlaytimeTrackerState>>,
-) -> bool {
-    state.is_running()
-}
-
-/// Refresh icons for all games in library (re-downloads HD icons)
-#[tauri::command]
-pub fn refresh_game_icons() -> Result<GameLibrary, String> {
-    let mut library: GameLibrary = read_json_file(&get_game_library_json_path())
-        .map_err(|e| format!("Failed to read game library: {}", e))?;
-
-    let cache_dir = get_icon_cache_dir()
-        .ok_or_else(|| "Failed to get icon cache directory".to_string())?;
-
-    // Clear existing icons for this library
-    for game in library.games.iter_mut() {
-        // Delete old icon if exists
-        if let Some(ref old_path) = game.icon_path {
-            let _ = std::fs::remove_file(old_path);
-        }
-
-        // Try to get new HD icon
-        let new_icon = match game.source {
-            GameSource::Steam => {
-                game.app_id.as_ref()
-                    .and_then(|app_id| download_steam_icon(app_id, &cache_dir))
-                    .or_else(|| {
-                        let exe_path = Path::new(&game.executable_path);
-                        extract_icon_from_exe(exe_path, &cache_dir)
-                    })
-            }
-            _ => {
-                let exe_path = Path::new(&game.executable_path);
-                extract_icon_from_exe(exe_path, &cache_dir)
-            }
+    if result as isize > 32 {
+        Ok(())
+    } else {
+        let error_msg = match result as isize {
+            0 => "Out of memory",
+            2 => "File not found",
+            3 => "Path not found",
+            5 => "Access denied",
+            8 => "Out of memory",
+            11 => "Invalid executable format",
+            26 => "Sharing violation",
+            27 => "Association incomplete",
+            28 => "DDE timeout",
+            29 => "DDE failed",
+            30 => "DDE busy",
+            31 => "No association",
+            32 => "DLL not found",
+            _ => "Unknown error",
         };
-
-        game.icon_path = new_icon;
+        Err(format!("Failed to launch game: {} (code {})", error_msg, result as isize))
     }
+}
 
-    write_json_file(&get_game_library_json_path(), &library)
-        .map_err(|e| format!("Failed to save game library: {}", e))?;
+#[cfg(not(windows))]
+fn launch_process_silent(exe_path: &str) -> Result<(), String> {
+    std::process::Command::new(exe_path)
+        .spawn()
+        .map_err(|e| format!("Failed to launch game: {}", e))?;
 
-    Ok(library)
+    Ok(())
 }

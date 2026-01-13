@@ -1,6 +1,8 @@
 // App.tsx - Main app component with routing + layout
 import { useEffect } from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, useNavigate } from 'react-router-dom';
+import { listen } from '@tauri-apps/api/event';
+import { invoke } from '@tauri-apps/api/core';
 import { Sidebar } from './components/Sidebar';
 import { UpdateToast } from './components/UpdateToast';
 import { Dashboard } from './views/Dashboard';
@@ -17,6 +19,7 @@ import './App.css';
 
 function App() {
   const { state, checkForUpdate, downloadAndInstall, dismissUpdate } = useUpdater();
+  const navigate = useNavigate();
 
   // Check for updates on app startup
   useEffect(() => {
@@ -27,6 +30,30 @@ function App() {
 
     return () => clearTimeout(timer);
   }, [checkForUpdate]);
+
+  // Listen for game launch navigation event
+  useEffect(() => {
+    const setupListener = async () => {
+      const unlisten = await listen('launcher:navigate_to_gaming', async () => {
+        try {
+          // Start performance monitoring and gaming detection
+          await invoke('start_performance_monitoring');
+          await invoke('start_gaming_detection');
+        } catch (e) {
+          console.error('Failed to start gaming detection:', e);
+        }
+        // Navigate to gaming view
+        navigate('/gaming');
+      });
+
+      return unlisten;
+    };
+
+    const promise = setupListener();
+    return () => {
+      promise.then((unlisten) => unlisten());
+    };
+  }, [navigate]);
 
   return (
     <div className="flex h-full bg-surface-base">

@@ -59,10 +59,11 @@ export function usePerformanceData(): UsePerformanceDataReturn {
   }, []);
 
   useEffect(() => {
-    let unlisten: UnlistenFn | undefined;
+    let unlistenUpdate: UnlistenFn | undefined;
+    let unlistenStopped: UnlistenFn | undefined;
 
     const setup = async () => {
-      unlisten = await listen<SystemMetrics>('performance:update', (event) => {
+      unlistenUpdate = await listen<SystemMetrics>('performance:update', (event) => {
         const metrics = event.payload;
         const now = metrics.timestamp;
 
@@ -87,6 +88,12 @@ export function usePerformanceData(): UsePerformanceDataReturn {
         });
       });
 
+      // Listen for monitoring stopped event
+      unlistenStopped = await listen<{ reason: string }>('performance:monitoring_stopped', (event) => {
+        console.log('Performance monitoring stopped:', event.payload.reason);
+        setIsMonitoring(false);
+      });
+
       if (!hasStarted.current) {
         hasStarted.current = true;
         await startMonitoring();
@@ -96,8 +103,11 @@ export function usePerformanceData(): UsePerformanceDataReturn {
     setup();
 
     return () => {
-      if (unlisten) {
-        unlisten();
+      if (unlistenUpdate) {
+        unlistenUpdate();
+      }
+      if (unlistenStopped) {
+        unlistenStopped();
       }
       invoke('stop_performance_monitoring').catch(console.error);
       hasStarted.current = false;

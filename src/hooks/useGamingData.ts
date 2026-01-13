@@ -215,6 +215,16 @@ export function useGamingData(): UseGamingDataReturn {
       );
       unlistenFns.push(unlistenStart);
 
+      // Listen for detection stopped event
+      const unlistenDetectionStopped = await listen<{ reason: string }>(
+        'gaming:detection_stopped',
+        (event) => {
+          console.log('Detection stopped:', event.payload.reason);
+          setIsDetecting(false);
+        }
+      );
+      unlistenFns.push(unlistenDetectionStopped);
+
       const unlistenEnd = await listen<GamingSessionEndedEvent>(
         'gaming:session_ended',
         (event) => {

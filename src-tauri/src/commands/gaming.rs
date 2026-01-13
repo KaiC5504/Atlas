@@ -9,6 +9,7 @@ use crate::gaming::{
     is_detection_running, start_game_detection, stop_game_detection, BottleneckAnalyzer,
     GameDetectionState, GamingSessionManager,
 };
+use crate::performance::MonitoringState;
 use crate::models::gaming::*;
 use crate::utils::{
     get_bottleneck_thresholds_json_path, get_game_whitelist_json_path,
@@ -94,11 +95,13 @@ pub fn start_gaming_detection(
     app: AppHandle,
     detection_state: State<'_, Arc<GameDetectionState>>,
     session_manager: State<'_, Arc<GamingSessionManager>>,
+    monitoring_state: State<'_, Arc<MonitoringState>>,
 ) -> Result<(), String> {
     let detection_state = (*detection_state).clone();
     let session_manager = (*session_manager).clone();
+    let monitoring_state = (*monitoring_state).clone();
 
-    start_game_detection(app, detection_state, session_manager);
+    start_game_detection(app, detection_state, session_manager, monitoring_state);
     Ok(())
 }
 
