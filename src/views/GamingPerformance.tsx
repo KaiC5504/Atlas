@@ -208,7 +208,7 @@ export default function GamingPerformance() {
               <SessionTimelineChart
                 snapshots={realtimeMetrics}
                 height={200}
-                startTime={realtimeMetrics[0]?.timestamp}
+                startTime={activeSession ? new Date(activeSession.start_time).getTime() : undefined}
               />
             </div>
           </div>
