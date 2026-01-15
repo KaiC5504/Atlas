@@ -15,10 +15,9 @@ export function NavigationItem({ to, label, icon: Icon, collapsed }: NavigationI
       to={to}
       className={({ isActive }) => `
         flex items-center gap-3 px-3 py-2.5 rounded-lg
-        transition-all duration-200 ease-out
         ${isActive
-          ? 'bg-accent-primary/20 text-white border-l-2 border-accent-primary pl-[10px]'
-          : 'text-text-secondary hover:bg-white/5 hover:text-white'
+          ? 'bg-accent-primary/20 text-white shadow-[inset_2px_0_0_var(--color-accent-primary)]'
+          : 'text-text-secondary transition-colors duration-150 hover:bg-white/5 hover:text-white'
         }
         ${collapsed ? 'justify-center' : ''}
       `}
