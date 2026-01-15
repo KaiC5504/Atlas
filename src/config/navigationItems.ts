@@ -34,7 +34,7 @@ export const NAVIGATION_ITEMS: Record<NavigationItemId, NavigationItemConfig> = 
   dashboard: {
     id: 'dashboard',
     label: 'Dashboard',
-    to: '/',
+    to: '/dashboard',
     icon: LayoutDashboard,
     isDeveloperOnly: true,
   },

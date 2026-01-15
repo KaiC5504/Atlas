@@ -1,6 +1,6 @@
-// Tauri command handlers - one file per domain
 pub mod audio_detection;
 pub mod auth;
+pub mod discord;
 pub mod downloads;
 pub mod gaming;
 pub mod launcher;

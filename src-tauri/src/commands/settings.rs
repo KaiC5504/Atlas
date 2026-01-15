@@ -16,6 +16,7 @@ pub struct UpdateSettingsParams {
     pub developer_mode_enabled: Option<bool>,
     pub sidebar_order: Option<Vec<String>>,
     pub hidden_sidebar_items: Option<Vec<String>>,
+    pub discord_rich_presence_enabled: Option<bool>,
 }
 
 /// Get current settings from the JSON file
@@ -35,7 +36,6 @@ pub fn get_settings() -> Result<Settings, String> {
 pub fn update_settings(settings: UpdateSettingsParams) -> Result<Settings, String> {
     let path = get_settings_json_path();
 
-    // Read current settings or use defaults
     let mut current_settings: Settings = if path.exists() {
         read_json_file(&path)?
     } else {
@@ -93,8 +93,10 @@ pub fn update_settings(settings: UpdateSettingsParams) -> Result<Settings, Strin
             Some(hidden_sidebar_items)
         };
     }
+    if let Some(discord_rich_presence_enabled) = settings.discord_rich_presence_enabled {
+        current_settings.discord_rich_presence_enabled = discord_rich_presence_enabled;
+    }
 
-    // Write back to file
     write_json_file(&path, &current_settings)?;
 
     println!("Updated settings: {:?}", current_settings);

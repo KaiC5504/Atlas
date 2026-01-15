@@ -17,6 +17,7 @@ import {
   ToggleLeft,
   ToggleRight,
   GripVertical,
+  MessageSquare,
 } from 'lucide-react';
 import { DraggableNavList } from '../components/DraggableNavList';
 import { useNavigationSettingsContext } from '../contexts';
@@ -36,6 +37,11 @@ export function Settings() {
   const [atlasProjectPath, setAtlasProjectPath] = useState('');
   const [remoteUpdatePath, setRemoteUpdatePath] = useState('');
   const [updateUrlBase, setUpdateUrlBase] = useState('');
+
+  // Discord state
+  const [discordEnabled, setDiscordEnabled] = useState(false);
+  const [discordConnected, setDiscordConnected] = useState(false);
+  const [discordConnecting, setDiscordConnecting] = useState(false);
 
   const {
     developerModeEnabled,
@@ -63,6 +69,11 @@ export function Settings() {
       setAtlasProjectPath(result.atlas_project_path || '');
       setRemoteUpdatePath(result.remote_update_path || '');
       setUpdateUrlBase(result.update_url_base || '');
+      setDiscordEnabled(result.discord_rich_presence_enabled);
+
+      // Check Discord connection status
+      const connected = await invoke<boolean>('is_discord_connected');
+      setDiscordConnected(connected);
     } catch (err) {
       setError(String(err));
     } finally {
@@ -83,6 +94,7 @@ export function Settings() {
         atlas_project_path: atlasProjectPath,
         remote_update_path: remoteUpdatePath,
         update_url_base: updateUrlBase,
+        discord_rich_presence_enabled: discordEnabled,
       };
       await invoke('update_settings', { settings: params });
       setMessage({ type: 'success', text: 'Settings saved successfully!' });
@@ -92,6 +104,41 @@ export function Settings() {
     } finally {
       setSaving(false);
     }
+  }
+
+  async function handleDiscordToggle() {
+    const newEnabled = !discordEnabled;
+    setDiscordEnabled(newEnabled);
+
+    if (newEnabled) {
+      // Try to connect when enabling
+      setDiscordConnecting(true);
+      try {
+        await invoke('connect_discord');
+        setDiscordConnected(true);
+        setMessage({ type: 'success', text: 'Discord Rich Presence connected!' });
+      } catch (err) {
+        setMessage({ type: 'error', text: `Discord connection failed: ${err}` });
+        setDiscordConnected(false);
+        setDiscordEnabled(false); // Revert toggle on failure
+        return;
+      } finally {
+        setDiscordConnecting(false);
+      }
+    } else {
+      // Disconnect when disabling
+      try {
+        await invoke('disconnect_discord');
+        setDiscordConnected(false);
+      } catch (err) {
+        console.error('Failed to disconnect Discord:', err);
+      }
+    }
+
+    // Save the setting
+    await invoke('update_settings', {
+      settings: { discord_rich_presence_enabled: newEnabled },
+    });
   }
 
   return (
@@ -226,6 +273,48 @@ export function Settings() {
                   <span>No credentials set. Login via Valorant Tracker page.</span>
                 </div>
               )}
+            </div>
+          </div>
+
+          {/* Discord Integration */}
+          <div className="card">
+            <div className="flex items-center gap-2 mb-4">
+              <MessageSquare size={18} className="text-indigo-400" />
+              <h2 className="card-title mb-0">Discord Integration</h2>
+            </div>
+
+            {/* Enable/Disable Toggle */}
+            <div className="flex items-center justify-between">
+              <div>
+                <label className="block text-sm font-medium text-text-secondary">
+                  Rich Presence
+                </label>
+                <p className="text-xs text-text-muted mt-0.5">
+                  Show gaming status on your Discord profile
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                {discordConnecting && (
+                  <Loader2 size={16} className="animate-spin text-text-muted" />
+                )}
+                {discordEnabled && discordConnected && (
+                  <span className="text-xs text-green-400">Connected</span>
+                )}
+                <button
+                  type="button"
+                  onClick={handleDiscordToggle}
+                  disabled={saving || discordConnecting}
+                  className={`
+                    p-1 rounded-lg transition-colors
+                    ${discordEnabled
+                      ? 'text-indigo-400 hover:text-indigo-300'
+                      : 'text-text-muted hover:text-text-secondary'
+                    }
+                  `}
+                >
+                  {discordEnabled ? <ToggleRight size={32} /> : <ToggleLeft size={32} />}
+                </button>
+              </div>
             </div>
           </div>
 

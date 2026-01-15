@@ -1,12 +1,10 @@
-// Gaming session manager
-// Handles session lifecycle and metrics recording
-
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 
+use crate::discord::DiscordPresenceManager;
 use crate::file_manager::{read_json_file, write_json_file};
 use crate::models::gaming::*;
 use crate::performance::SharedMetrics;
@@ -28,21 +26,26 @@ pub struct GamingSessionManager {
     active_session: Arc<Mutex<Option<ActiveSessionData>>>,
     bottleneck_analyzer: Arc<BottleneckAnalyzer>,
     shared_metrics: Arc<SharedMetrics>,
+    discord: Arc<DiscordPresenceManager>,
 }
 
 impl GamingSessionManager {
-    pub fn new(app: AppHandle, bottleneck_analyzer: Arc<BottleneckAnalyzer>, shared_metrics: Arc<SharedMetrics>) -> Self {
+    pub fn new(
+        app: AppHandle,
+        bottleneck_analyzer: Arc<BottleneckAnalyzer>,
+        shared_metrics: Arc<SharedMetrics>,
+        discord: Arc<DiscordPresenceManager>,
+    ) -> Self {
         Self {
             app,
             active_session: Arc::new(Mutex::new(None)),
             bottleneck_analyzer,
             shared_metrics,
+            discord,
         }
     }
 
-    /// Start a new gaming session
     pub fn start_session(&self, game_name: &str, process_name: &str) -> Result<GamingSession, String> {
-        // Check if there's already an active session
         {
             let guard = self.active_session.lock().map_err(|e| e.to_string())?;
             if guard.is_some() {
@@ -63,8 +66,10 @@ impl GamingSessionManager {
             summary: None,
         };
 
-        // Add to sessions list JSON
         self.add_session_to_list(&session)?;
+
+        // Update Discord Rich Presence
+        let _ = self.discord.update_gaming_presence(game_name, &BottleneckType::Balanced);
 
         // Start metrics recording
         self.start_recording(session.clone());
@@ -73,19 +78,17 @@ impl GamingSessionManager {
         Ok(session)
     }
 
-    /// Start recording metrics for active session
-    /// Uses shared metrics from the main performance collector instead of creating
-    /// a duplicate collector (avoids duplicate NVML queries that hurt game FPS)
     fn start_recording(&self, session: GamingSession) {
         let active_session = self.active_session.clone();
         let app = self.app.clone();
         let analyzer = self.bottleneck_analyzer.clone();
         let shared_metrics = self.shared_metrics.clone();
+        let discord = self.discord.clone();
+        let game_name = session.game_name.clone();
         let is_recording = Arc::new(AtomicBool::new(true));
         let is_recording_clone = is_recording.clone();
         let session_id = session.id.clone();
 
-        // Store active session data first
         {
             if let Ok(mut guard) = self.active_session.lock() {
                 *guard = Some(ActiveSessionData {
@@ -98,43 +101,30 @@ impl GamingSessionManager {
             }
         }
 
-        // Start recording thread - reads from shared metrics instead of collecting directly
         thread::spawn(move || {
-            // Give the performance collector time to get accurate readings
-            // CPU usage calculation requires multiple samples, first readings are often 100% or 0%
             thread::sleep(Duration::from_millis(500));
 
-            // Warmup: skip first few readings to avoid inaccurate initial CPU values
-            // that would falsely trigger CPU bottleneck detection
             const WARMUP_SAMPLES: u32 = 3;
             let mut warmup_count: u32 = 0;
 
             while is_recording_clone.load(Ordering::SeqCst) {
-                // Read metrics from shared state (populated by the main performance collector)
-                // This avoids creating duplicate NVML queries that hurt game FPS
                 if let Some(system_metrics) = shared_metrics.get() {
                     let snapshot = convert_to_snapshot(&system_metrics);
 
-                    // Skip warmup samples - CPU readings are inaccurate initially
                     if warmup_count < WARMUP_SAMPLES {
                         warmup_count += 1;
                         thread::sleep(Duration::from_secs(1));
                         continue;
                     }
 
-                    // Analyze for bottleneck
                     let status = analyzer.analyze(&snapshot);
 
-                    // Update active session data
                     if let Ok(mut guard) = active_session.lock() {
                         if let Some(ref mut data) = *guard {
-                            // Add snapshot
                             data.snapshots.push(snapshot.clone());
 
-                            // Check for bottleneck state change
                             let new_bottleneck = status.bottleneck_type.clone();
                             if Some(new_bottleneck.clone()) != data.current_bottleneck {
-                                // End previous bottleneck event (calculate duration)
                                 if let Some(last_event) = data.bottleneck_events.last_mut() {
                                     if last_event.duration_seconds.is_none() {
                                         let duration = (snapshot.timestamp - last_event.timestamp) as f32 / 1000.0;
@@ -142,7 +132,6 @@ impl GamingSessionManager {
                                     }
                                 }
 
-                                // Start new bottleneck event (if not balanced)
                                 if new_bottleneck != BottleneckType::Balanced {
                                     data.bottleneck_events.push(BottleneckEvent {
                                         timestamp: snapshot.timestamp,
@@ -153,7 +142,10 @@ impl GamingSessionManager {
                                     });
                                 }
 
-                                data.current_bottleneck = Some(new_bottleneck);
+                                data.current_bottleneck = Some(new_bottleneck.clone());
+
+                                // Update Discord Rich Presence
+                                let _ = discord.update_gaming_presence(&game_name, &new_bottleneck);
                             }
                         }
                     }
@@ -171,7 +163,6 @@ impl GamingSessionManager {
                     });
                 }
 
-                // Wait 1 second before next read
                 thread::sleep(Duration::from_secs(1));
             }
 
@@ -198,7 +189,7 @@ impl GamingSessionManager {
         self.end_session_internal(&mut guard)
     }
 
-    /// Get the current active session (if any)
+    /// Get the current active session
     pub fn get_active_session(&self) -> Option<GamingSession> {
         let guard = self.active_session.lock().ok()?;
         guard.as_ref().map(|data| data.session.clone())
@@ -209,13 +200,10 @@ impl GamingSessionManager {
         guard: &mut Option<ActiveSessionData>,
     ) -> Result<GamingSession, String> {
         if let Some(mut data) = guard.take() {
-            // Stop recording
             data.is_recording.store(false, Ordering::SeqCst);
 
-            // Give recording thread time to stop
             thread::sleep(Duration::from_millis(100));
 
-            // Close last bottleneck event if still open
             if let Some(last_event) = data.bottleneck_events.last_mut() {
                 if last_event.duration_seconds.is_none() {
                     if let Some(last_snapshot) = data.snapshots.last() {
@@ -244,6 +232,9 @@ impl GamingSessionManager {
 
             // Update session in list
             self.update_session_in_list(&session)?;
+
+            // Reset Discord to idle presence
+            let _ = self.discord.set_idle_presence();
 
             println!("Ended gaming session: {} ({})", session.game_name, session.id);
             return Ok(session);

@@ -1,4 +1,3 @@
-// Settings data models
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -27,6 +26,8 @@ pub struct Settings {
     pub sidebar_order: Option<Vec<String>>,
     #[serde(default)]
     pub hidden_sidebar_items: Option<Vec<String>>,
+    #[serde(default)]
+    pub discord_rich_presence_enabled: bool,
 }
 
 impl Default for Settings {
@@ -43,6 +44,7 @@ impl Default for Settings {
             developer_mode_enabled: false,
             sidebar_order: None,
             hidden_sidebar_items: None,
+            discord_rich_presence_enabled: false,
         }
     }
 }

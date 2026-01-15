@@ -1,5 +1,5 @@
-// Atlas - Main library file
 mod commands;
+mod discord;
 mod file_manager;
 mod gaming;
 mod launcher;
@@ -15,6 +15,7 @@ use commands::{
         submit_audio_detection_job,
     },
     auth::{capture_auth_cookies, close_auth_window, get_auth_status, get_stored_credentials, logout, open_auth_window},
+    discord::{connect_discord, disconnect_discord, is_discord_connected},
     downloads::{add_download, cancel_download, delete_download, list_downloads, start_download},
     gaming::{
         add_game_to_whitelist, delete_gaming_session, end_gaming_session,
@@ -42,6 +43,7 @@ use commands::{
     updater::{check_for_update, download_and_install_update, get_current_version},
     valorant::{check_valorant_store, get_store_history, get_valorant_store, should_auto_refresh_store},
 };
+use discord::DiscordPresenceManager;
 use file_manager::initialize_json_file;
 use gaming::{BottleneckAnalyzer, GameDetectionState, GamingSessionManager};
 use launcher::PlaytimeTrackerState;
@@ -95,6 +97,7 @@ pub fn run() {
     let bottleneck_analyzer = Arc::new(BottleneckAnalyzer::new());
     let shared_metrics = Arc::new(SharedMetrics::new());
     let playtime_tracker_state = Arc::new(PlaytimeTrackerState::new());
+    let discord_manager = Arc::new(DiscordPresenceManager::new());
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -105,11 +108,23 @@ pub fn run() {
         .manage(bottleneck_analyzer.clone())
         .manage(shared_metrics.clone())
         .manage(playtime_tracker_state.clone())
+        .manage(discord_manager.clone())
         .setup(move |app| {
+            // Initialize Discord Rich Presence
+            let settings = get_settings().unwrap_or_default();
+            if settings.discord_rich_presence_enabled {
+                if let Err(e) = discord_manager.connect() {
+                    eprintln!("Failed to connect to Discord: {}", e);
+                } else {
+                    println!("Discord Rich Presence connected");
+                }
+            }
+
             let session_manager = Arc::new(GamingSessionManager::new(
                 app.handle().clone(),
                 bottleneck_analyzer.clone(),
                 shared_metrics.clone(),
+                discord_manager.clone(),
             ));
             app.manage(session_manager);
             Ok(())
@@ -149,10 +164,13 @@ pub fn run() {
             check_valorant_store,
             get_store_history,
             should_auto_refresh_store,
-            // Settings commands
             get_settings,
             update_settings,
-            // Server monitoring commands
+            // Discord Rich Presence
+            connect_discord,
+            disconnect_discord,
+            is_discord_connected,
+            // Server monitoring
             get_server_config,
             update_server_config,
             save_ssh_credentials,

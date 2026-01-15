@@ -24,6 +24,7 @@ export interface Settings {
   developer_mode_enabled: boolean;
   sidebar_order: string[] | null;
   hidden_sidebar_items: string[] | null;
+  discord_rich_presence_enabled: boolean;
 }
 
 export interface UpdateSettingsParams {
@@ -38,4 +39,5 @@ export interface UpdateSettingsParams {
   developer_mode_enabled?: boolean;
   sidebar_order?: string[];
   hidden_sidebar_items?: string[];
+  discord_rich_presence_enabled?: boolean;
 }

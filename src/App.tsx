@@ -5,6 +5,7 @@ import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 import { Sidebar } from './components/Sidebar';
 import { UpdateToast } from './components/UpdateToast';
+import { DefaultRouteRedirect } from './components/DefaultRouteRedirect';
 import { Dashboard } from './views/Dashboard';
 import { DownloadQueue } from './views/DownloadQueue';
 import { MLProcessor } from './views/MLProcessor';
@@ -71,7 +72,8 @@ function App() {
         {/* Main content area */}
         <main className="flex-1 p-6 overflow-auto animate-fade-in">
           <Routes>
-            <Route path="/" element={<Dashboard />} />
+            <Route path="/" element={<DefaultRouteRedirect />} />
+            <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/downloads" element={<DownloadQueue />} />
             <Route path="/ml-processor" element={<MLProcessor />} />
             <Route path="/valorant" element={<ValorantTracker />} />
