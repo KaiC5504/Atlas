@@ -2,22 +2,13 @@
 import { useState } from 'react';
 import { NavigationItem } from './NavigationItem';
 import { version } from '../../package.json';
-import {
-  LayoutDashboard,
-  Download,
-  BrainCircuit,
-  Gamepad2,
-  Server,
-  Activity,
-  Gauge,
-  Library,
-  Settings,
-  ChevronLeft,
-  ChevronRight,
-} from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { useNavigationSettingsContext } from '../contexts';
+import { NAVIGATION_ITEMS } from '../config/navigationItems';
 
 export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
+  const { visibleItems, isLoading } = useNavigationSettingsContext();
 
   return (
     <aside
@@ -43,70 +34,25 @@ export function Sidebar() {
         </button>
       </div>
 
-      {/* Navigation items */}
       <nav className="flex-1 p-2 space-y-1">
-        <NavigationItem
-          to="/"
-          label="Dashboard"
-          icon={LayoutDashboard}
-          collapsed={collapsed}
-        />
-        <NavigationItem
-          to="/downloads"
-          label="Downloads"
-          icon={Download}
-          collapsed={collapsed}
-        />
-        <NavigationItem
-          to="/ml-processor"
-          label="ML Processor"
-          icon={BrainCircuit}
-          collapsed={collapsed}
-        />
-        <NavigationItem
-          to="/valorant"
-          label="Valorant"
-          icon={Gamepad2}
-          collapsed={collapsed}
-        />
-        <NavigationItem
-          to="/server"
-          label="Server"
-          icon={Server}
-          collapsed={collapsed}
-        />
-        <NavigationItem
-          to="/performance"
-          label="Performance"
-          icon={Activity}
-          collapsed={collapsed}
-        />
-        <NavigationItem
-          to="/gaming"
-          label="Gaming"
-          icon={Gauge}
-          collapsed={collapsed}
-        />
-        <NavigationItem
-          to="/launcher"
-          label="Library"
-          icon={Library}
-          collapsed={collapsed}
-        />
-        <NavigationItem
-          to="/settings"
-          label="Settings"
-          icon={Settings}
-          collapsed={collapsed}
-        />
+        {!isLoading &&
+          visibleItems.map(itemId => {
+            const item = NAVIGATION_ITEMS[itemId];
+            return (
+              <NavigationItem
+                key={item.id}
+                to={item.to}
+                label={item.label}
+                icon={item.icon}
+                collapsed={collapsed}
+              />
+            );
+          })}
       </nav>
 
-      {/* Footer */}
       {!collapsed && (
         <div className="p-4 border-t border-white/10">
-          <p className="text-xs text-text-muted text-center">
-            v{version}
-          </p>
+          <p className="text-xs text-text-muted text-center">v{version}</p>
         </div>
       )}
     </aside>

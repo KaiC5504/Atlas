@@ -14,7 +14,12 @@ import {
   AlertCircle,
   Hash,
   Code,
+  ToggleLeft,
+  ToggleRight,
+  GripVertical,
 } from 'lucide-react';
+import { DraggableNavList } from '../components/DraggableNavList';
+import { useNavigationSettingsContext } from '../contexts';
 
 export function Settings() {
   const [settings, setSettings] = useState<SettingsType | null>(null);
@@ -31,6 +36,15 @@ export function Settings() {
   const [atlasProjectPath, setAtlasProjectPath] = useState('');
   const [remoteUpdatePath, setRemoteUpdatePath] = useState('');
   const [updateUrlBase, setUpdateUrlBase] = useState('');
+
+  const {
+    developerModeEnabled,
+    orderedItems,
+    hiddenItems,
+    toggleDeveloperMode,
+    reorderItems,
+    toggleItemVisibility,
+  } = useNavigationSettingsContext();
 
   useEffect(() => {
     fetchSettings();
@@ -108,89 +122,91 @@ export function Settings() {
 
       {!loading && !error && (
         <form onSubmit={handleSave} className="space-y-6">
-          {/* Download Settings */}
-          <div className="card">
-            <div className="flex items-center gap-2 mb-4">
-              <Download size={18} className="text-accent-primary" />
-              <h2 className="card-title mb-0">Download Settings</h2>
-            </div>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-text-secondary mb-2">
-                  <FolderOpen size={14} className="inline mr-2" />
-                  Download Path
-                </label>
-                <input
-                  type="text"
-                  value={downloadPath}
-                  onChange={(e) => setDownloadPath(e.target.value)}
-                  disabled={saving}
-                  className="input"
-                  placeholder="/path/to/downloads"
-                />
+          {developerModeEnabled && (
+            <div className="card">
+              <div className="flex items-center gap-2 mb-4">
+                <Download size={18} className="text-accent-primary" />
+                <h2 className="card-title mb-0">Download Settings</h2>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-text-secondary mb-2">
-                    Default Quality
-                  </label>
-                  <select
-                    value={defaultQuality}
-                    onChange={(e) => setDefaultQuality(e.target.value)}
-                    disabled={saving}
-                    className="select"
-                  >
-                    <option value="best">Best Quality</option>
-                    <option value="1080p">1080p</option>
-                    <option value="720p">720p</option>
-                    <option value="480p">480p</option>
-                    <option value="audio_only">Audio Only</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-text-secondary mb-2">
-                    <Hash size={14} className="inline mr-2" />
-                    Max Concurrent Downloads
+                    <FolderOpen size={14} className="inline mr-2" />
+                    Download Path
                   </label>
                   <input
-                    type="number"
-                    min="1"
-                    max="10"
-                    value={maxConcurrentDownloads}
-                    onChange={(e) => setMaxConcurrentDownloads(parseInt(e.target.value) || 1)}
+                    type="text"
+                    value={downloadPath}
+                    onChange={(e) => setDownloadPath(e.target.value)}
                     disabled={saving}
                     className="input"
+                    placeholder="/path/to/downloads"
                   />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-text-secondary mb-2">
+                      Default Quality
+                    </label>
+                    <select
+                      value={defaultQuality}
+                      onChange={(e) => setDefaultQuality(e.target.value)}
+                      disabled={saving}
+                      className="select"
+                    >
+                      <option value="best">Best Quality</option>
+                      <option value="1080p">1080p</option>
+                      <option value="720p">720p</option>
+                      <option value="480p">480p</option>
+                      <option value="audio_only">Audio Only</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-text-secondary mb-2">
+                      <Hash size={14} className="inline mr-2" />
+                      Max Concurrent Downloads
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="10"
+                      value={maxConcurrentDownloads}
+                      onChange={(e) => setMaxConcurrentDownloads(parseInt(e.target.value) || 1)}
+                      disabled={saving}
+                      className="input"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
+          )}
 
-          {/* ML Settings */}
-          <div className="card">
-            <div className="flex items-center gap-2 mb-4">
-              <BrainCircuit size={18} className="text-purple-400" />
-              <h2 className="card-title mb-0">ML Settings</h2>
+          {developerModeEnabled && (
+            <div className="card">
+              <div className="flex items-center gap-2 mb-4">
+                <BrainCircuit size={18} className="text-purple-400" />
+                <h2 className="card-title mb-0">ML Settings</h2>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-2">
+                  <Hash size={14} className="inline mr-2" />
+                  Max Concurrent ML Jobs
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="5"
+                  value={maxConcurrentMLJobs}
+                  onChange={(e) => setMaxConcurrentMLJobs(parseInt(e.target.value) || 1)}
+                  disabled={saving}
+                  className="input max-w-xs"
+                />
+                <p className="text-xs text-text-muted mt-1">
+                  ML jobs are resource-intensive. Keep this low for stability.
+                </p>
+              </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-text-secondary mb-2">
-                <Hash size={14} className="inline mr-2" />
-                Max Concurrent ML Jobs
-              </label>
-              <input
-                type="number"
-                min="1"
-                max="5"
-                value={maxConcurrentMLJobs}
-                onChange={(e) => setMaxConcurrentMLJobs(parseInt(e.target.value) || 1)}
-                disabled={saving}
-                className="input max-w-xs"
-              />
-              <p className="text-xs text-text-muted mt-1">
-                ML jobs are resource-intensive. Keep this low for stability.
-              </p>
-            </div>
-          </div>
+          )}
 
           {/* Valorant Settings */}
           <div className="card">
@@ -213,65 +229,112 @@ export function Settings() {
             </div>
           </div>
 
-          {/* Developer Settings */}
+          {/* Customization */}
           <div className="card">
             <div className="flex items-center gap-2 mb-4">
               <Code size={18} className="text-cyan-400" />
-              <h2 className="card-title mb-0">Developer Settings</h2>
+              <h2 className="card-title mb-0">Customization</h2>
             </div>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-text-secondary mb-2">
-                  <FolderOpen size={14} className="inline mr-2" />
-                  Atlas Project Path
-                </label>
-                <input
-                  type="text"
-                  value={atlasProjectPath}
-                  onChange={(e) => setAtlasProjectPath(e.target.value)}
-                  disabled={saving}
-                  className="input"
-                  placeholder="E:\tools\Kai Chuan\Projects\Atlas"
-                />
-                <p className="text-xs text-text-muted mt-1">
-                  Path to the Atlas project folder. Used for auto-detecting build files when deploying updates.
-                </p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-text-secondary mb-2">
-                  <FolderOpen size={14} className="inline mr-2" />
-                  Remote Update Path
-                </label>
-                <input
-                  type="text"
-                  value={remoteUpdatePath}
-                  onChange={(e) => setRemoteUpdatePath(e.target.value)}
-                  disabled={saving}
-                  className="input"
-                  placeholder="/var/www/updates.example.com/atlas"
-                />
-                <p className="text-xs text-text-muted mt-1">
-                  Remote server path where update files are uploaded via SFTP.
-                </p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-text-secondary mb-2">
-                  <FolderOpen size={14} className="inline mr-2" />
-                  Update URL Base
-                </label>
-                <input
-                  type="text"
-                  value={updateUrlBase}
-                  onChange={(e) => setUpdateUrlBase(e.target.value)}
-                  disabled={saving}
-                  className="input"
-                  placeholder="https://updates.example.com/atlas"
-                />
-                <p className="text-xs text-text-muted mt-1">
-                  Public URL base for update files. Used for update.json verification.
-                </p>
-              </div>
+
+            {/* Sidebar Order */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-text-secondary mb-2">
+                <GripVertical size={14} className="inline mr-2" />
+                Sidebar Order
+              </label>
+              <p className="text-xs text-text-muted mb-3">
+                Drag items to reorder the sidebar navigation
+              </p>
+              <DraggableNavList
+                items={orderedItems}
+                hiddenItems={hiddenItems}
+                onReorder={reorderItems}
+                onToggleVisibility={toggleItemVisibility}
+                disabled={saving}
+              />
             </div>
+
+            {/* Developer Mode Toggle */}
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <label className="block text-sm font-medium text-text-secondary">
+                  Developer Mode
+                </label>
+                <p className="text-xs text-text-muted mt-0.5">
+                  Show advanced tools in sidebar (Dashboard, Downloads, ML Processor, Server)
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={toggleDeveloperMode}
+                disabled={saving}
+                className={`
+                  p-1 rounded-lg transition-colors
+                  ${developerModeEnabled
+                    ? 'text-cyan-400 hover:text-cyan-300'
+                    : 'text-text-muted hover:text-text-secondary'
+                  }
+                `}
+              >
+                {developerModeEnabled ? <ToggleRight size={32} /> : <ToggleLeft size={32} />}
+              </button>
+            </div>
+
+            {developerModeEnabled && (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-text-secondary mb-2">
+                    <FolderOpen size={14} className="inline mr-2" />
+                    Atlas Project Path
+                  </label>
+                  <input
+                    type="text"
+                    value={atlasProjectPath}
+                    onChange={(e) => setAtlasProjectPath(e.target.value)}
+                    disabled={saving}
+                    className="input"
+                    placeholder="E:\tools\Kai Chuan\Projects\Atlas"
+                  />
+                  <p className="text-xs text-text-muted mt-1">
+                    Path to the Atlas project folder. Used for auto-detecting build files when deploying updates.
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-text-secondary mb-2">
+                    <FolderOpen size={14} className="inline mr-2" />
+                    Remote Update Path
+                  </label>
+                  <input
+                    type="text"
+                    value={remoteUpdatePath}
+                    onChange={(e) => setRemoteUpdatePath(e.target.value)}
+                    disabled={saving}
+                    className="input"
+                    placeholder="/var/www/updates.example.com/atlas"
+                  />
+                  <p className="text-xs text-text-muted mt-1">
+                    Remote server path where update files are uploaded via SFTP.
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-text-secondary mb-2">
+                    <FolderOpen size={14} className="inline mr-2" />
+                    Update URL Base
+                  </label>
+                  <input
+                    type="text"
+                    value={updateUrlBase}
+                    onChange={(e) => setUpdateUrlBase(e.target.value)}
+                    disabled={saving}
+                    className="input"
+                    placeholder="https://updates.example.com/atlas"
+                  />
+                  <p className="text-xs text-text-muted mt-1">
+                    Public URL base for update files. Used for update.json verification.
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Save Button */}

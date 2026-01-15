@@ -13,6 +13,9 @@ pub struct UpdateSettingsParams {
     pub atlas_project_path: Option<String>,
     pub remote_update_path: Option<String>,
     pub update_url_base: Option<String>,
+    pub developer_mode_enabled: Option<bool>,
+    pub sidebar_order: Option<Vec<String>>,
+    pub hidden_sidebar_items: Option<Vec<String>>,
 }
 
 /// Get current settings from the JSON file
@@ -71,6 +74,23 @@ pub fn update_settings(settings: UpdateSettingsParams) -> Result<Settings, Strin
             None
         } else {
             Some(update_url_base)
+        };
+    }
+    if let Some(developer_mode_enabled) = settings.developer_mode_enabled {
+        current_settings.developer_mode_enabled = developer_mode_enabled;
+    }
+    if let Some(sidebar_order) = settings.sidebar_order {
+        current_settings.sidebar_order = if sidebar_order.is_empty() {
+            None
+        } else {
+            Some(sidebar_order)
+        };
+    }
+    if let Some(hidden_sidebar_items) = settings.hidden_sidebar_items {
+        current_settings.hidden_sidebar_items = if hidden_sidebar_items.is_empty() {
+            None
+        } else {
+            Some(hidden_sidebar_items)
         };
     }
 

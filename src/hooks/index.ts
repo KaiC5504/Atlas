@@ -7,3 +7,5 @@ export { useUpdater } from './useUpdater';
 export type { UseUpdaterReturn } from './useUpdater';
 export { useGameLauncher } from './useGameLauncher';
 export type { UseGameLauncherReturn } from './useGameLauncher';
+export { useNavigationSettings } from './useNavigationSettings';
+export type { UseNavigationSettingsReturn } from './useNavigationSettings';

@@ -21,6 +21,9 @@ export interface Settings {
   atlas_project_path: string | null;
   remote_update_path: string | null;
   update_url_base: string | null;
+  developer_mode_enabled: boolean;
+  sidebar_order: string[] | null;
+  hidden_sidebar_items: string[] | null;
 }
 
 export interface UpdateSettingsParams {
@@ -32,4 +35,7 @@ export interface UpdateSettingsParams {
   atlas_project_path?: string;
   remote_update_path?: string;
   update_url_base?: string;
+  developer_mode_enabled?: boolean;
+  sidebar_order?: string[];
+  hidden_sidebar_items?: string[];
 }

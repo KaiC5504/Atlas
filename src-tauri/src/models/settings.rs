@@ -21,6 +21,12 @@ pub struct Settings {
     pub remote_update_path: Option<String>,
     #[serde(default)]
     pub update_url_base: Option<String>,
+    #[serde(default)]
+    pub developer_mode_enabled: bool,
+    #[serde(default)]
+    pub sidebar_order: Option<Vec<String>>,
+    #[serde(default)]
+    pub hidden_sidebar_items: Option<Vec<String>>,
 }
 
 impl Default for Settings {
@@ -34,6 +40,9 @@ impl Default for Settings {
             atlas_project_path: None,
             remote_update_path: None,
             update_url_base: None,
+            developer_mode_enabled: false,
+            sidebar_order: None,
+            hidden_sidebar_items: None,
         }
     }
 }

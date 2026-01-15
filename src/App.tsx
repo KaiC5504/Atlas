@@ -15,6 +15,7 @@ import GamingPerformance from './views/GamingPerformance';
 import GameLauncher from './views/GameLauncher';
 import { Settings } from './views/Settings';
 import { useUpdater } from './hooks';
+import { NavigationSettingsProvider } from './contexts';
 import './App.css';
 
 function App() {
@@ -56,40 +57,42 @@ function App() {
   }, [navigate]);
 
   return (
-    <div className="flex h-full bg-surface-base">
-      {/* Animated background gradient */}
-      <div className="fixed inset-0 -z-10 overflow-hidden">
-        <div className="absolute -top-1/2 -left-1/2 w-full h-full bg-gradient-to-br from-indigo-500/10 via-transparent to-transparent rounded-full blur-3xl" />
-        <div className="absolute -bottom-1/2 -right-1/2 w-full h-full bg-gradient-to-tl from-purple-500/10 via-transparent to-transparent rounded-full blur-3xl" />
+    <NavigationSettingsProvider>
+      <div className="flex h-full bg-surface-base">
+        {/* Animated background gradient */}
+        <div className="fixed inset-0 -z-10 overflow-hidden">
+          <div className="absolute -top-1/2 -left-1/2 w-full h-full bg-gradient-to-br from-indigo-500/10 via-transparent to-transparent rounded-full blur-3xl" />
+          <div className="absolute -bottom-1/2 -right-1/2 w-full h-full bg-gradient-to-tl from-purple-500/10 via-transparent to-transparent rounded-full blur-3xl" />
+        </div>
+
+        {/* Sidebar navigation */}
+        <Sidebar />
+
+        {/* Main content area */}
+        <main className="flex-1 p-6 overflow-auto animate-fade-in">
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/downloads" element={<DownloadQueue />} />
+            <Route path="/ml-processor" element={<MLProcessor />} />
+            <Route path="/valorant" element={<ValorantTracker />} />
+            <Route path="/server" element={<ServerMonitor />} />
+            <Route path="/performance" element={<PerformanceMonitor />} />
+            <Route path="/gaming" element={<GamingPerformance />} />
+            <Route path="/launcher" element={<GameLauncher />} />
+            <Route path="/settings" element={<Settings />} />
+          </Routes>
+        </main>
+
+        {/* Update toast notification */}
+        <UpdateToast
+          state={state}
+          onDownload={downloadAndInstall}
+          onRestart={downloadAndInstall}
+          onDismiss={dismissUpdate}
+          onRetry={checkForUpdate}
+        />
       </div>
-
-      {/* Sidebar navigation */}
-      <Sidebar />
-
-      {/* Main content area */}
-      <main className="flex-1 p-6 overflow-auto animate-fade-in">
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/downloads" element={<DownloadQueue />} />
-          <Route path="/ml-processor" element={<MLProcessor />} />
-          <Route path="/valorant" element={<ValorantTracker />} />
-          <Route path="/server" element={<ServerMonitor />} />
-          <Route path="/performance" element={<PerformanceMonitor />} />
-          <Route path="/gaming" element={<GamingPerformance />} />
-          <Route path="/launcher" element={<GameLauncher />} />
-          <Route path="/settings" element={<Settings />} />
-        </Routes>
-      </main>
-
-      {/* Update toast notification */}
-      <UpdateToast
-        state={state}
-        onDownload={downloadAndInstall}
-        onRestart={downloadAndInstall}
-        onDismiss={dismissUpdate}
-        onRetry={checkForUpdate}
-      />
-    </div>
+    </NavigationSettingsProvider>
   );
 }
 
