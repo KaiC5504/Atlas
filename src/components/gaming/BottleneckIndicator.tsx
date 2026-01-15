@@ -141,11 +141,18 @@ export function BottleneckIndicator({ status, compact = false }: BottleneckIndic
           value={`${status.metrics.cpu_percent.toFixed(0)}%`}
           highlight={['cpu_bound', 'cpu_thermal'].includes(status.bottleneck_type)}
         />
-        {status.metrics.gpu_percent !== null && (
+        {status.metrics.top_core_1 && (
           <MetricPill
-            label="GPU"
-            value={`${status.metrics.gpu_percent.toFixed(0)}%`}
-            highlight={['gpu_bound', 'gpu_thermal'].includes(status.bottleneck_type)}
+            label={`Core ${status.metrics.top_core_1.core_index}`}
+            value={`${status.metrics.top_core_1.usage_percent.toFixed(0)}%`}
+            highlight={['cpu_bound', 'cpu_thermal'].includes(status.bottleneck_type)}
+          />
+        )}
+        {status.metrics.top_core_2 && (
+          <MetricPill
+            label={`Core ${status.metrics.top_core_2.core_index}`}
+            value={`${status.metrics.top_core_2.usage_percent.toFixed(0)}%`}
+            highlight={['cpu_bound', 'cpu_thermal'].includes(status.bottleneck_type)}
           />
         )}
         <MetricPill
@@ -153,18 +160,11 @@ export function BottleneckIndicator({ status, compact = false }: BottleneckIndic
           value={`${status.metrics.ram_percent.toFixed(0)}%`}
           highlight={status.bottleneck_type === 'ram_limited'}
         />
-        {status.metrics.vram_percent !== null && (
+        {status.metrics.gpu_percent !== null && (
           <MetricPill
-            label="VRAM"
-            value={`${status.metrics.vram_percent.toFixed(0)}%`}
-            highlight={status.bottleneck_type === 'vram_limited'}
-          />
-        )}
-        {status.metrics.cpu_temp !== null && (
-          <MetricPill
-            label="CPU Temp"
-            value={`${status.metrics.cpu_temp.toFixed(0)}C`}
-            highlight={status.bottleneck_type === 'cpu_thermal'}
+            label="GPU"
+            value={`${status.metrics.gpu_percent.toFixed(0)}%`}
+            highlight={['gpu_bound', 'gpu_thermal'].includes(status.bottleneck_type)}
           />
         )}
         {status.metrics.gpu_temp !== null && (

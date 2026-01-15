@@ -23,9 +23,16 @@ export interface GamingSession {
 
 export type SessionStatus = 'active' | 'completed' | 'cancelled';
 
+export interface TopCoreInfo {
+  core_index: number;
+  usage_percent: number;
+}
+
 export interface MetricsSnapshot {
   timestamp: number;
   cpu_percent: number;
+  top_core_1: TopCoreInfo | null;
+  top_core_2: TopCoreInfo | null;
   gpu_percent: number | null;
   ram_percent: number;
   vram_percent: number | null;
@@ -53,6 +60,8 @@ export type BottleneckType =
 export interface SessionSummary {
   duration_seconds: number;
   cpu: MetricStats;
+  top_core_1: MetricStats | null;
+  top_core_2: MetricStats | null;
   gpu: MetricStats | null;
   ram: MetricStats;
   vram: MetricStats | null;

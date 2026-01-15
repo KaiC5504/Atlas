@@ -37,11 +37,20 @@ pub enum SessionStatus {
     Cancelled,
 }
 
+/// Top CPU core info
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TopCoreInfo {
+    pub core_index: usize,              // Core number (0-based)
+    pub usage_percent: f32,             // Usage percentage (0-100)
+}
+
 /// Metrics snapshot during gaming session
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MetricsSnapshot {
     pub timestamp: i64,                 // Unix timestamp in milliseconds
     pub cpu_percent: f32,               // CPU usage (0-100)
+    pub top_core_1: Option<TopCoreInfo>, // Highest used CPU core
+    pub top_core_2: Option<TopCoreInfo>, // Second highest used CPU core
     pub gpu_percent: Option<f32>,       // GPU usage (0-100) - None if no GPU
     pub ram_percent: f32,               // RAM usage (0-100)
     pub vram_percent: Option<f32>,      // VRAM usage (0-100) - None if no GPU
@@ -77,6 +86,8 @@ pub enum BottleneckType {
 pub struct SessionSummary {
     pub duration_seconds: f64,          // Total session duration
     pub cpu: MetricStats,               // CPU statistics
+    pub top_core_1: Option<MetricStats>, // Top core 1 statistics
+    pub top_core_2: Option<MetricStats>, // Top core 2 statistics
     pub gpu: Option<MetricStats>,       // GPU statistics
     pub ram: MetricStats,               // RAM statistics
     pub vram: Option<MetricStats>,      // VRAM statistics
@@ -158,6 +169,8 @@ impl Default for MetricsSnapshot {
         Self {
             timestamp: 0,
             cpu_percent: 0.0,
+            top_core_1: None,
+            top_core_2: None,
             gpu_percent: None,
             ram_percent: 0.0,
             vram_percent: None,

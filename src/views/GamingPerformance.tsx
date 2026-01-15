@@ -494,10 +494,16 @@ function SessionDetailsContent({ data }: { data: GamingSessionData }) {
       {summary && (
         <div className="grid grid-cols-3 gap-4">
           <StatCard label="CPU Avg" value={`${summary.cpu.avg.toFixed(0)}%`} max={`${summary.cpu.max.toFixed(0)}%`} />
+          {summary.top_core_1 && (
+            <StatCard label="Core 1 Avg" value={`${summary.top_core_1.avg.toFixed(0)}%`} max={`${summary.top_core_1.max.toFixed(0)}%`} />
+          )}
+          {summary.top_core_2 && (
+            <StatCard label="Core 2 Avg" value={`${summary.top_core_2.avg.toFixed(0)}%`} max={`${summary.top_core_2.max.toFixed(0)}%`} />
+          )}
+          <StatCard label="RAM Avg" value={`${summary.ram.avg.toFixed(0)}%`} max={`${summary.ram.max.toFixed(0)}%`} />
           {summary.gpu && (
             <StatCard label="GPU Avg" value={`${summary.gpu.avg.toFixed(0)}%`} max={`${summary.gpu.max.toFixed(0)}%`} />
           )}
-          <StatCard label="RAM Avg" value={`${summary.ram.avg.toFixed(0)}%`} max={`${summary.ram.max.toFixed(0)}%`} />
         </div>
       )}
 

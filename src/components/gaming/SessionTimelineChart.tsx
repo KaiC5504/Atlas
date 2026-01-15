@@ -52,6 +52,36 @@ export function SessionTimelineChart({
     timestamp: snapshot.timestamp,
   }));
 
+  // Generate ticks - use 30-second boundaries for longer sessions
+  const generateTicks = (): number[] | undefined => {
+    if (chartData.length === 0) return undefined;
+
+    const times = chartData.map(d => d.time);
+    const minTime = Math.min(...times);
+    const maxTime = Math.max(...times);
+    const range = maxTime - minTime;
+
+    // For short durations (< 3 minutes), let Recharts auto-generate ticks
+    if (range < 180) {
+      return undefined;
+    }
+
+    // For longer durations, use 30-second boundary ticks
+    // Calculate interval to get ~6 ticks, rounded to 30-second multiples
+    const idealInterval = range / 5;
+    const interval = Math.max(30, Math.round(idealInterval / 30) * 30);
+
+    // Start from nearest interval boundary at or before minTime
+    const startTick = Math.floor(minTime / interval) * interval;
+
+    const ticks: number[] = [];
+    for (let t = startTick; t <= maxTime + interval * 0.5; t += interval) {
+      ticks.push(t);
+    }
+    return ticks;
+  };
+  const timeTicks = generateTicks();
+
   // Check if GPU data is available
   const hasGpu = showGpu && snapshots.some((s) => s.gpu_percent !== null);
 
@@ -81,6 +111,10 @@ export function SessionTimelineChart({
 
           <XAxis
             dataKey="time"
+            type="number"
+            domain={['dataMin', 'dataMax']}
+            ticks={timeTicks}
+            tickCount={timeTicks ? undefined : 6}
             stroke="rgba(255,255,255,0.5)"
             tickFormatter={formatTime}
             tick={{ fill: 'rgba(255,255,255,0.5)', fontSize: 12 }}

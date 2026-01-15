@@ -274,12 +274,22 @@ impl GamingSessionManager {
         let cpu_temp_values: Vec<f32> = snapshots.iter().filter_map(|s| s.cpu_temp).collect();
         let gpu_temp_values: Vec<f32> = snapshots.iter().filter_map(|s| s.gpu_temp).collect();
 
+        // Calculate top core statistics
+        let top_core_1_values: Vec<f32> = snapshots.iter()
+            .filter_map(|s| s.top_core_1.as_ref().map(|c| c.usage_percent))
+            .collect();
+        let top_core_2_values: Vec<f32> = snapshots.iter()
+            .filter_map(|s| s.top_core_2.as_ref().map(|c| c.usage_percent))
+            .collect();
+
         let cpu = calculate_stats(&cpu_values);
         let ram = calculate_stats(&ram_values);
         let gpu = if gpu_values.is_empty() { None } else { Some(calculate_stats(&gpu_values)) };
         let vram = if vram_values.is_empty() { None } else { Some(calculate_stats(&vram_values)) };
         let cpu_temp = if cpu_temp_values.is_empty() { None } else { Some(calculate_stats(&cpu_temp_values)) };
         let gpu_temp = if gpu_temp_values.is_empty() { None } else { Some(calculate_stats(&gpu_temp_values)) };
+        let top_core_1 = if top_core_1_values.is_empty() { None } else { Some(calculate_stats(&top_core_1_values)) };
+        let top_core_2 = if top_core_2_values.is_empty() { None } else { Some(calculate_stats(&top_core_2_values)) };
 
         // Calculate bottleneck breakdown
         let bottleneck_breakdown = self.calculate_bottleneck_breakdown(events, duration);
@@ -299,6 +309,8 @@ impl GamingSessionManager {
         SessionSummary {
             duration_seconds: duration,
             cpu,
+            top_core_1,
+            top_core_2,
             gpu,
             ram,
             vram,
@@ -382,15 +394,49 @@ fn convert_to_snapshot(metrics: &crate::models::performance::SystemMetrics) -> M
     });
     let gpu_temp = metrics.gpu.as_ref().and_then(|g| g.temperature_celsius);
 
+    // Calculate top 2 CPU cores
+    let (top_core_1, top_core_2) = get_top_two_cores(&metrics.cpu.per_core_usage);
+
     MetricsSnapshot {
         timestamp: metrics.timestamp,
         cpu_percent: metrics.cpu.usage_percent,
+        top_core_1,
+        top_core_2,
         gpu_percent,
         ram_percent: metrics.ram.usage_percent,
         vram_percent,
         cpu_temp: metrics.cpu.temperature_celsius,
         gpu_temp,
     }
+}
+
+/// Get the top 2 highest CPU cores by usage
+fn get_top_two_cores(per_core_usage: &[f32]) -> (Option<TopCoreInfo>, Option<TopCoreInfo>) {
+    if per_core_usage.is_empty() {
+        return (None, None);
+    }
+
+    // Create indexed pairs (index, usage)
+    let mut indexed: Vec<(usize, f32)> = per_core_usage
+        .iter()
+        .enumerate()
+        .map(|(i, &u)| (i, u))
+        .collect();
+
+    // Sort by usage descending
+    indexed.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+
+    let top1 = indexed.first().map(|(idx, usage)| TopCoreInfo {
+        core_index: *idx,
+        usage_percent: *usage,
+    });
+
+    let top2 = indexed.get(1).map(|(idx, usage)| TopCoreInfo {
+        core_index: *idx,
+        usage_percent: *usage,
+    });
+
+    (top1, top2)
 }
 
 /// Calculate statistics for a list of values
