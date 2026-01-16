@@ -1,7 +1,7 @@
 // Valorant command handlers - real implementation with file storage
 use crate::file_manager::{read_json_file, write_json_file};
 use crate::models::{RiotAuthCookies, ValorantItem, ValorantStore};
-use crate::process_manager::spawn_python_worker;
+use crate::process_manager::spawn_python_worker_async;
 use crate::utils::{get_auth_json_path, get_valorant_store_json_path};
 use chrono::{FixedOffset, TimeZone, Timelike, Utc};
 
@@ -84,18 +84,22 @@ pub fn get_valorant_store() -> Result<Option<ValorantStore>, String> {
 
 /// Check the Valorant store (fetches fresh data)
 #[tauri::command]
-pub fn check_valorant_store(region: Option<String>) -> Result<ValorantStore, String> {
+pub async fn check_valorant_store(region: Option<String>) -> Result<ValorantStore, String> {
     let region = region.unwrap_or_else(|| "na".to_string());
 
     println!("Checking Valorant store for region: {}", region);
 
-    // Get stored auth cookies
+    // Get stored auth cookies (run blocking file I/O on spawn_blocking)
     let auth_path = get_auth_json_path();
-    let auth_cookies: Option<RiotAuthCookies> = if auth_path.exists() {
-        read_json_file(&auth_path).ok()
-    } else {
-        None
-    };
+    let auth_cookies: Option<RiotAuthCookies> = tokio::task::spawn_blocking(move || {
+        if auth_path.exists() {
+            read_json_file(&auth_path).ok()
+        } else {
+            None
+        }
+    })
+    .await
+    .map_err(|e| format!("Failed to read auth cookies: {}", e))?;
 
     // Prepare worker input with cookies
     let worker_input = serde_json::json!({
@@ -103,8 +107,8 @@ pub fn check_valorant_store(region: Option<String>) -> Result<ValorantStore, Str
         "cookies": auth_cookies
     });
 
-    // Spawn the Python worker
-    let result = spawn_python_worker("valorant_checker.py", worker_input)?;
+    // Spawn the Python worker asynchronously (non-blocking)
+    let result = spawn_python_worker_async("valorant_checker.py", worker_input, None).await?;
 
     // Parse the result
     let date = result
@@ -154,32 +158,37 @@ pub fn check_valorant_store(region: Option<String>) -> Result<ValorantStore, Str
         is_real_data,
     };
 
-    // Save to history
-    let path = get_valorant_store_json_path();
-    let mut stores: Vec<ValorantStore> = if path.exists() {
-        read_json_file(&path)?
-    } else {
-        vec![]
-    };
+    // Save to history (run blocking file I/O on spawn_blocking)
+    let store_clone = store.clone();
+    tokio::task::spawn_blocking(move || -> Result<(), String> {
+        let path = get_valorant_store_json_path();
+        let mut stores: Vec<ValorantStore> = if path.exists() {
+            read_json_file(&path)?
+        } else {
+            vec![]
+        };
 
-    // Check if we already have an entry for today
-    let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
-    let existing_index = stores.iter().position(|s| s.date == today);
+        // Check if we already have an entry for today
+        let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+        let existing_index = stores.iter().position(|s| s.date == today);
 
-    match existing_index {
-        Some(idx) => {
-            // Update existing entry for today
-            stores[idx] = store.clone();
+        match existing_index {
+            Some(idx) => {
+                // Update existing entry for today
+                stores[idx] = store_clone;
+            }
+            None => {
+                // Add new entry
+                stores.push(store_clone);
+            }
         }
-        None => {
-            // Add new entry
-            stores.push(store.clone());
-        }
-    }
 
-    write_json_file(&path, &stores)?;
-
-    println!("Valorant store checked and saved");
+        write_json_file(&path, &stores)?;
+        println!("Valorant store checked and saved");
+        Ok(())
+    })
+    .await
+    .map_err(|e| format!("Failed to save store: {}", e))??;
 
     Ok(store)
 }

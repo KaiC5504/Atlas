@@ -52,7 +52,19 @@ pub fn start_game_detection(
     let monitoring_state = monitoring_state.clone();
 
     thread::spawn(move || {
+        // Set thread priority to BELOW_NORMAL to minimize FPS impact during gaming
+        #[cfg(windows)]
+        {
+            use windows_sys::Win32::System::Threading::{
+                GetCurrentThread, SetThreadPriority, THREAD_PRIORITY_BELOW_NORMAL,
+            };
+            unsafe {
+                SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL);
+            }
+        }
+
         let mut system = System::new();
+        let whitelist = load_game_whitelist(); // Load once, not every iteration
 
         let detected_game = loop {
             if !is_running.load(Ordering::SeqCst) {
@@ -73,8 +85,6 @@ pub fn start_game_detection(
                         .to_lowercase()
                 })
                 .collect();
-
-            let whitelist = load_game_whitelist();
 
             let mut found_game: Option<(String, String)> = None;
 

@@ -504,6 +504,9 @@ function SessionDetailsContent({ data }: { data: GamingSessionData }) {
           {summary.gpu && (
             <StatCard label="GPU Avg" value={`${summary.gpu.avg.toFixed(0)}%`} max={`${summary.gpu.max.toFixed(0)}%`} />
           )}
+          {summary.gpu_temp && (
+            <StatCard label="GPU Temp" value={`${summary.gpu_temp.avg.toFixed(0)}°C`} max={`${summary.gpu_temp.max.toFixed(0)}°C`} />
+          )}
         </div>
       )}
 

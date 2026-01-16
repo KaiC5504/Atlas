@@ -16,7 +16,7 @@ use commands::{
     },
     auth::{capture_auth_cookies, close_auth_window, get_auth_status, get_stored_credentials, logout, open_auth_window},
     discord::{connect_discord, disconnect_discord, is_discord_connected},
-    downloads::{add_download, cancel_download, delete_download, list_downloads, start_download},
+    downloads::{add_download, cancel_download, delete_download, list_downloads, start_download, validate_download_path},
     gaming::{
         add_game_to_whitelist, delete_gaming_session, end_gaming_session,
         get_active_gaming_session, get_bottleneck_thresholds, get_game_whitelist,
@@ -143,6 +143,7 @@ pub fn run() {
             start_download,
             cancel_download,
             delete_download,
+            validate_download_path,
             // ML Job commands
             list_ml_jobs,
             submit_ml_job,

@@ -33,7 +33,7 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            download_path: String::from("downloads"),
+            download_path: String::from("Downloads"),
             default_quality: String::from("best"),
             max_concurrent_downloads: 3,
             max_concurrent_ml_jobs: 1,

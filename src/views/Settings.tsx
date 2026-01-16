@@ -1,5 +1,5 @@
 // Settings view - app configuration
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import type { Settings as SettingsType, UpdateSettingsParams } from '../types';
 import {
@@ -18,9 +18,19 @@ import {
   ToggleRight,
   GripVertical,
   MessageSquare,
+  Info,
 } from 'lucide-react';
 import { DraggableNavList } from '../components/DraggableNavList';
 import { useNavigationSettingsContext } from '../contexts';
+
+// Type for download path validation result
+interface DownloadPathValidation {
+  valid: boolean;
+  resolved_path: string;
+  exists: boolean;
+  is_special_folder: boolean;
+  message: string;
+}
 
 export function Settings() {
   const [settings, setSettings] = useState<SettingsType | null>(null);
@@ -37,6 +47,10 @@ export function Settings() {
   const [atlasProjectPath, setAtlasProjectPath] = useState('');
   const [remoteUpdatePath, setRemoteUpdatePath] = useState('');
   const [updateUrlBase, setUpdateUrlBase] = useState('');
+
+  // Path validation state
+  const [pathValidation, setPathValidation] = useState<DownloadPathValidation | null>(null);
+  const [validatingPath, setValidatingPath] = useState(false);
 
   // Discord state
   const [discordEnabled, setDiscordEnabled] = useState(false);
@@ -55,6 +69,33 @@ export function Settings() {
   useEffect(() => {
     fetchSettings();
   }, []);
+
+  // Validate download path with debounce
+  const validatePath = useCallback(async (path: string) => {
+    setValidatingPath(true);
+    try {
+      const result = await invoke<DownloadPathValidation>('validate_download_path', { path });
+      setPathValidation(result);
+    } catch (err) {
+      setPathValidation({
+        valid: false,
+        resolved_path: '',
+        exists: false,
+        is_special_folder: false,
+        message: `Validation error: ${err}`,
+      });
+    } finally {
+      setValidatingPath(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      validatePath(downloadPath);
+    }, 300); // Debounce 300ms
+
+    return () => clearTimeout(timer);
+  }, [downloadPath, validatePath]);
 
   async function fetchSettings() {
     try {
@@ -181,14 +222,55 @@ export function Settings() {
                     <FolderOpen size={14} className="inline mr-2" />
                     Download Path
                   </label>
-                  <input
-                    type="text"
-                    value={downloadPath}
-                    onChange={(e) => setDownloadPath(e.target.value)}
-                    disabled={saving}
-                    className="input"
-                    placeholder="/path/to/downloads"
-                  />
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={downloadPath}
+                      onChange={(e) => setDownloadPath(e.target.value)}
+                      disabled={saving}
+                      className={`input pr-10 ${
+                        pathValidation
+                          ? pathValidation.valid
+                            ? 'border-green-500/30 focus:border-green-500/50'
+                            : 'border-red-500/30 focus:border-red-500/50'
+                          : ''
+                      }`}
+                      placeholder="Downloads"
+                    />
+                    {validatingPath && (
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                        <Loader2 size={16} className="animate-spin text-text-muted" />
+                      </div>
+                    )}
+                    {!validatingPath && pathValidation && (
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                        {pathValidation.valid ? (
+                          <CheckCircle size={16} className="text-green-400" />
+                        ) : (
+                          <AlertCircle size={16} className="text-red-400" />
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  {/* Path validation feedback */}
+                  {pathValidation && (
+                    <div className={`mt-2 text-xs ${pathValidation.valid ? 'text-text-muted' : 'text-red-400'}`}>
+                      <div className="flex items-start gap-1.5">
+                        <Info size={12} className="mt-0.5 shrink-0" />
+                        <div>
+                          <div>{pathValidation.message}</div>
+                          {pathValidation.valid && pathValidation.resolved_path && (
+                            <div className="text-text-muted/70 mt-0.5 break-all">
+                              {pathValidation.resolved_path}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  <p className="text-xs text-text-muted mt-1">
+                    Tip: Use "Downloads", "Desktop", "Documents", "Videos" for quick access to Windows folders
+                  </p>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>

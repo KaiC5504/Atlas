@@ -222,10 +222,6 @@ export function ValorantTracker() {
                       {authStatus.has_full_cookies ? 'Full Auth' : 'Partial'}
                     </span>
                   </h3>
-                  <p className="text-sm text-text-muted">
-                    {authStatus.expires_hint && `Valid for ~${authStatus.expires_hint}`}
-                    {authStatus.puuid && ` | ${authStatus.puuid.substring(0, 8)}...`}
-                  </p>
                 </div>
               </>
             ) : (
@@ -300,9 +296,6 @@ export function ValorantTracker() {
         <div className="flex items-center gap-2 mb-4">
           <ShoppingBag size={20} className="text-text-secondary" />
           <h2 className="text-lg font-semibold text-white">Today's Store</h2>
-          {currentStore?.is_real_data === true && (
-            <span className="badge badge-success">Real Data</span>
-          )}
           {currentStore?.is_real_data === false && (
             <span className="badge badge-warning">Mock Data</span>
           )}
@@ -380,7 +373,6 @@ export function ValorantTracker() {
                         <p className="text-lg font-bold text-accent-primary">
                           {item.price.toLocaleString()} VP
                         </p>
-                        <p className="text-xs text-text-muted capitalize">{item.item_type}</p>
                       </div>
                     </div>
                   </div>
@@ -417,9 +409,6 @@ export function ValorantTracker() {
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="text-sm text-text-muted">{store.items.length} items</span>
-                    {store.is_real_data === true && (
-                      <span className="badge badge-success text-xs">real</span>
-                    )}
                     {store.is_real_data === false && (
                       <span className="badge badge-warning text-xs">mock</span>
                     )}
