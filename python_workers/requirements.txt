@@ -7,3 +7,5 @@ yt-dlp
 requests
 tls_client
 paramiko
+pypinyin
+opencc-python-reimplemented

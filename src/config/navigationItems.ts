@@ -9,6 +9,7 @@ import {
   Gauge,
   Library,
   Settings,
+  Music2,
 } from 'lucide-react';
 
 export type NavigationItemId =
@@ -20,6 +21,7 @@ export type NavigationItemId =
   | 'performance'
   | 'gaming'
   | 'library'
+  | 'playlist-uploader'
   | 'settings';
 
 export interface NavigationItemConfig {
@@ -87,6 +89,13 @@ export const NAVIGATION_ITEMS: Record<NavigationItemId, NavigationItemConfig> = 
     icon: Library,
     isDeveloperOnly: false,
   },
+  'playlist-uploader': {
+    id: 'playlist-uploader',
+    label: 'Music',
+    to: '/playlist-uploader',
+    icon: Music2,
+    isDeveloperOnly: true,
+  },
   settings: {
     id: 'settings',
     label: 'Settings',
@@ -109,6 +118,7 @@ export const DEFAULT_DEVELOPER_ORDER: NavigationItemId[] = [
   'downloads',
   'ml-processor',
   'server',
+  'playlist-uploader',
   'library',
   'gaming',
   'performance',

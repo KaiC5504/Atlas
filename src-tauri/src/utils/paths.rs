@@ -109,7 +109,26 @@ pub fn get_game_library_json_path() -> PathBuf {
     get_data_dir().join("game_library.json")
 }
 
-/// Creates the directory structure if it doesn't exist
+pub fn get_music_dir() -> PathBuf {
+    get_app_data_dir().join("music")
+}
+
+pub fn get_music_tracks_dir() -> PathBuf {
+    get_music_dir().join("tracks")
+}
+
+pub fn get_music_playlists_dir() -> PathBuf {
+    get_music_dir().join("playlists")
+}
+
+pub fn get_music_index_json_path() -> PathBuf {
+    get_music_dir().join("index.json")
+}
+
+pub fn get_playlist_js_path() -> PathBuf {
+    get_music_dir().join("playlist.js")
+}
+
 pub fn initialize_data_directories() -> Result<(), String> {
     let directories = [
         get_data_dir(),
@@ -119,6 +138,8 @@ pub fn initialize_data_directories() -> Result<(), String> {
         get_models_dir(),
         get_logs_dir(),
         get_gaming_sessions_dir(),
+        get_music_tracks_dir(),
+        get_music_playlists_dir(),
     ];
 
     for dir in &directories {

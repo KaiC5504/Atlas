@@ -6,6 +6,7 @@ pub mod gaming;
 pub mod launcher;
 pub mod ml_jobs;
 pub mod performance;
+pub mod playlist_uploader;
 pub mod server;
 pub mod settings;
 pub mod updater;

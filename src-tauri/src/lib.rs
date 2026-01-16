@@ -33,6 +33,10 @@ use commands::{
         get_performance_snapshot, has_nvidia_gpu, is_performance_monitoring,
         start_performance_monitoring, stop_performance_monitoring,
     },
+    playlist_uploader::{
+        download_playlist, get_local_music_index, get_local_playlists, get_music_directory,
+        restart_discord_bot, sync_from_server, upload_to_server,
+    },
     server::{
         check_local_file_exists, clear_ssh_credentials, execute_ssh_command, get_quick_actions,
         get_server_config, get_ssh_credentials, get_system_status, has_ssh_credentials,
@@ -219,6 +223,14 @@ pub fn run() {
             remove_game_from_library,
             launch_game,
             get_icon_base64,
+            // Playlist uploader commands
+            get_music_directory,
+            get_local_music_index,
+            get_local_playlists,
+            sync_from_server,
+            download_playlist,
+            upload_to_server,
+            restart_discord_bot,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
