@@ -32,7 +32,7 @@ impl PlaytimeTrackerState {
     }
 }
 
-/// Start tracking a specific game's playtime.
+/// Start tracking game's playtime.
 pub fn start_game_session(
     app_handle: AppHandle,
     state: Arc<PlaytimeTrackerState>,
@@ -122,6 +122,7 @@ fn wait_for_process_exit(process_name: &str) {
     }
 }
 
+#[allow(dead_code)] 
 pub fn get_active_game_sessions(state: &PlaytimeTrackerState) -> Vec<String> {
     state
         .active_sessions

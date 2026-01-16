@@ -17,7 +17,6 @@ pub use download::*;
 pub use gaming::*;
 pub use launcher::*;
 pub use ml_job::*;
-pub use performance::*;
 pub use playlist_uploader::*;
 pub use server::*;
 pub use settings::*;

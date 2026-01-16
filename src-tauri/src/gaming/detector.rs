@@ -199,38 +199,3 @@ pub fn stop_game_detection(detection_state: Arc<GameDetectionState>) {
 pub fn is_detection_running(detection_state: Arc<GameDetectionState>) -> bool {
     detection_state.is_running.load(Ordering::SeqCst)
 }
-
-/// Get currently detected game (if any)
-/// This is a one-time check, not continuous monitoring
-pub fn get_detected_game() -> Option<(String, String)> {
-    let mut system = System::new();
-    system.refresh_processes_specifics(ProcessRefreshKind::new());
-
-    let whitelist = load_game_whitelist();
-    let enabled_games: Vec<_> = whitelist
-        .games
-        .iter()
-        .filter(|g| g.enabled)
-        .collect();
-
-    for process in system.processes().values() {
-        let process_name = process.name().to_string();
-
-        // Note: sysinfo 0.30+ returns process names WITHOUT .exe on Windows
-        if let Some(game) = enabled_games.iter().find(|g| {
-            let whitelist_name = g.process_name
-                .trim_end_matches(".exe")
-                .trim_end_matches(".EXE")
-                .to_lowercase();
-            let running_name = process_name
-                .trim_end_matches(".exe")
-                .trim_end_matches(".EXE")
-                .to_lowercase();
-            whitelist_name == running_name
-        }) {
-            return Some((game.name.clone(), process_name));
-        }
-    }
-
-    None
-}

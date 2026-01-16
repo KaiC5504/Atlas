@@ -174,8 +174,8 @@ pub struct SystemStatus {
     pub cpu_usage: String,
 }
 
-/// Event payload for SSH output streaming
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)] 
 pub struct SSHOutputEvent {
     pub session_id: String,
     pub output: String,
@@ -184,6 +184,7 @@ pub struct SSHOutputEvent {
 
 /// Event payload for SSH command completion
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)] 
 pub struct SSHCompleteEvent {
     pub session_id: String,
     pub exit_code: i32,

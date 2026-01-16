@@ -1,12 +1,9 @@
-// Path utilities
-
 use std::fs;
 use std::path::PathBuf;
 use std::sync::OnceLock;
 
 static APP_DATA_DIR: OnceLock<PathBuf> = OnceLock::new();
 
-/// Returns the app data directory (e.g., %APPDATA%\Atlas on Windows)
 pub fn get_app_data_dir() -> PathBuf {
     APP_DATA_DIR
         .get_or_init(|| {
@@ -123,10 +120,6 @@ pub fn get_music_playlists_dir() -> PathBuf {
 
 pub fn get_music_index_json_path() -> PathBuf {
     get_music_dir().join("index.json")
-}
-
-pub fn get_playlist_js_path() -> PathBuf {
-    get_music_dir().join("playlist.js")
 }
 
 pub fn initialize_data_directories() -> Result<(), String> {

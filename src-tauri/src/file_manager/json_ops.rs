@@ -1,5 +1,3 @@
-// Atomic JSON file operations
-
 use serde::{de::DeserializeOwned, Serialize};
 use std::fs::{self, File};
 use std::io::{Read, Write};
@@ -27,7 +25,7 @@ pub fn read_json_file<T: DeserializeOwned>(path: &Path) -> Result<T, String> {
         .map_err(|e| format!("Failed to parse JSON from {:?}: {}", path, e))
 }
 
-/// Writes JSON atomically using write-to-temp-then-rename
+/// Writes JSON atomically
 pub fn write_json_file<T: Serialize>(path: &Path, data: &T) -> Result<(), String> {
     let _lock = FILE_LOCK.lock().map_err(|e| format!("Lock error: {}", e))?;
 
@@ -64,23 +62,4 @@ pub fn initialize_json_file<T: Serialize>(path: &Path, default: &T) -> Result<()
         write_json_file(path, default)?;
     }
     Ok(())
-}
-
-pub fn read_json_file_or_default<T: DeserializeOwned + Default>(path: &Path) -> Result<T, String> {
-    if path.exists() {
-        read_json_file(path)
-    } else {
-        Ok(T::default())
-    }
-}
-
-pub fn update_json_file<T, F>(path: &Path, update_fn: F) -> Result<T, String>
-where
-    T: DeserializeOwned + Serialize + Clone,
-    F: FnOnce(&mut T),
-{
-    let mut data: T = read_json_file(path)?;
-    update_fn(&mut data);
-    write_json_file(path, &data)?;
-    Ok(data)
 }

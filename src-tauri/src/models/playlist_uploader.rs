@@ -23,6 +23,7 @@ pub type MusicIndex = HashMap<String, TrackMetadata>;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
+#[allow(dead_code)] 
 pub enum SyncStatus {
     Idle,
     Syncing,
@@ -32,6 +33,7 @@ pub enum SyncStatus {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
+#[allow(dead_code)] 
 pub enum PlaylistDownloadStatus {
     Idle,
     FetchingMetadata,

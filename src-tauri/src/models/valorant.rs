@@ -1,4 +1,3 @@
-// Valorant data models
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -19,6 +18,7 @@ pub struct ValorantStore {
 }
 
 impl ValorantStore {
+    #[allow(dead_code)] 
     pub fn new(items: Vec<ValorantItem>) -> Self {
         let now = chrono::Utc::now();
         Self {

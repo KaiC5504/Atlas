@@ -1,4 +1,3 @@
-// Audio Event Detection data models
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -11,13 +10,12 @@ pub enum AudioDetectionStatus {
     Cancelled,
 }
 
-/// A detected timestamp segment with confidence score
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TimestampSegment {
     pub start_seconds: f64,
     pub end_seconds: f64,
-    pub confidence: f64, // 0.0 - 1.0
-    pub label: String,   // "target_audio"
+    pub confidence: f64, 
+    pub label: String,   
 }
 
 /// Result of audio event detection inference
@@ -35,7 +33,7 @@ pub struct AudioDetectionJob {
     pub id: String,
     pub input_file: String,
     pub status: AudioDetectionStatus,
-    pub progress: u8, // 0-100
+    pub progress: u8, 
     pub stage: Option<String>,
     pub created_at: String,
     pub completed_at: Option<String>,
@@ -85,14 +83,16 @@ impl Default for ModelConfig {
 
 /// Training sample entry for manifest
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)] 
 pub struct TrainingSample {
     pub file: String,
-    pub label: String, // "target_audio" or "other"
+    pub label: String, 
     pub source: String,
 }
 
 /// Training data manifest
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)] 
 pub struct TrainingManifest {
     pub positive_samples: Vec<TrainingSample>,
     pub negative_samples: Vec<TrainingSample>,

@@ -1,6 +1,3 @@
-// Steam game detector
-// Detects installed Steam games via registry and libraryfolders.vdf parsing
-
 use crate::models::{DetectedGame, GameSource};
 use crate::launcher::icon_extractor::{extract_icon_from_exe, get_icon_cache_dir, download_steam_icon};
 use std::fs;
@@ -14,7 +11,6 @@ use winreg::RegKey;
 /// Find Steam installation path from Windows registry
 #[cfg(windows)]
 pub fn find_steam_path() -> Option<PathBuf> {
-    // Try 64-bit registry first
     if let Ok(hklm) = RegKey::predef(HKEY_LOCAL_MACHINE).open_subkey("SOFTWARE\\Wow6432Node\\Valve\\Steam") {
         if let Ok(path) = hklm.get_value::<String, _>("InstallPath") {
             let steam_path = PathBuf::from(&path);
@@ -24,7 +20,6 @@ pub fn find_steam_path() -> Option<PathBuf> {
         }
     }
 
-    // Try 32-bit registry
     if let Ok(hklm) = RegKey::predef(HKEY_LOCAL_MACHINE).open_subkey("SOFTWARE\\Valve\\Steam") {
         if let Ok(path) = hklm.get_value::<String, _>("InstallPath") {
             let steam_path = PathBuf::from(&path);
@@ -34,7 +29,6 @@ pub fn find_steam_path() -> Option<PathBuf> {
         }
     }
 
-    // Try current user registry
     if let Ok(hkcu) = RegKey::predef(HKEY_CURRENT_USER).open_subkey("SOFTWARE\\Valve\\Steam") {
         if let Ok(path) = hkcu.get_value::<String, _>("SteamPath") {
             let steam_path = PathBuf::from(&path);
@@ -52,7 +46,7 @@ pub fn find_steam_path() -> Option<PathBuf> {
     None
 }
 
-/// Parse libraryfolders.vdf to get all Steam library paths
+/// Parse libraryfolders.vdf 
 pub fn get_library_folders(steam_path: &Path) -> Vec<PathBuf> {
     let mut libraries = vec![steam_path.to_path_buf()];
 
@@ -66,7 +60,7 @@ pub fn get_library_folders(steam_path: &Path) -> Vec<PathBuf> {
         Err(_) => return libraries,
     };
 
-    // Parse VDF format - look for "path" entries
+    // Parse VDF format
     for line in content.lines() {
         let trimmed = line.trim();
         if trimmed.starts_with("\"path\"") {
@@ -82,7 +76,7 @@ pub fn get_library_folders(steam_path: &Path) -> Vec<PathBuf> {
     libraries
 }
 
-/// Extract value from VDF line like: "key" "value"
+/// Extract value from VDF 
 fn extract_vdf_value(line: &str) -> Option<String> {
     let parts: Vec<&str> = line.split('"').collect();
     if parts.len() >= 4 {
@@ -92,7 +86,7 @@ fn extract_vdf_value(line: &str) -> Option<String> {
     }
 }
 
-/// Parse an ACF (App Cache File) to extract game info
+/// Parse an ACF
 fn parse_acf_file(acf_path: &Path) -> Option<AcfData> {
     let content = fs::read_to_string(acf_path).ok()?;
 
@@ -124,16 +118,14 @@ struct AcfData {
     install_dir: Option<String>,
 }
 
-/// Find the main executable in a game's installation directory
+/// Find the main executable 
 fn find_game_executable(install_path: &Path) -> Option<PathBuf> {
     if !install_path.exists() {
         return None;
     }
 
-    // Common executable patterns to look for
     let common_names = ["game.exe", "launcher.exe", "start.exe"];
 
-    // First, look for exe files directly in the install directory
     let mut exe_files: Vec<PathBuf> = Vec::new();
 
     if let Ok(entries) = fs::read_dir(install_path) {
@@ -149,12 +141,10 @@ fn find_game_executable(install_path: &Path) -> Option<PathBuf> {
         }
     }
 
-    // If only one exe, return it
     if exe_files.len() == 1 {
         return Some(exe_files[0].clone());
     }
 
-    // Look for common names
     for name in &common_names {
         if let Some(exe) = exe_files.iter().find(|p| {
             p.file_name()
@@ -165,13 +155,11 @@ fn find_game_executable(install_path: &Path) -> Option<PathBuf> {
         }
     }
 
-    // Return the largest exe (often the main game executable)
     exe_files.into_iter().max_by_key(|p| {
         fs::metadata(p).map(|m| m.len()).unwrap_or(0)
     })
 }
 
-/// Detect all installed Steam games
 pub fn detect_steam_games() -> Vec<DetectedGame> {
     let mut games = Vec::new();
 
@@ -188,7 +176,6 @@ pub fn detect_steam_games() -> Vec<DetectedGame> {
             continue;
         }
 
-        // Scan for appmanifest_*.acf files
         let entries = match fs::read_dir(&steamapps) {
             Ok(e) => e,
             Err(_) => continue,
@@ -207,12 +194,6 @@ pub fn detect_steam_games() -> Vec<DetectedGame> {
                     let install_path = steamapps.join("common").join(&install_dir);
 
                     if let Some(exe_path) = find_game_executable(&install_path) {
-                        let process_name = exe_path
-                            .file_name()
-                            .map(|n| n.to_string_lossy().to_string())
-                            .unwrap_or_default();
-
-                        // Try to get HD icon from Steam CDN first, fallback to exe extraction
                         let icon_path = get_icon_cache_dir().and_then(|cache_dir| {
                             acf_data.app_id.as_ref()
                                 .and_then(|app_id| download_steam_icon(app_id, &cache_dir))

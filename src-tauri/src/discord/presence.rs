@@ -133,6 +133,7 @@ impl DiscordPresenceManager {
         Ok(())
     }
 
+    #[allow(dead_code)] 
     pub fn try_reconnect(&self) -> Result<(), String> {
         if self.is_connected() {
             return Ok(());

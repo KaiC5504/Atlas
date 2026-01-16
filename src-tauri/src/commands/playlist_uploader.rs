@@ -6,7 +6,7 @@ use crate::models::{
 use crate::process_manager::{spawn_python_worker_async, WorkerMessage};
 use crate::utils::{
     get_music_dir, get_music_index_json_path, get_music_playlists_dir, get_music_tracks_dir,
-    get_playlist_js_path, get_server_config_json_path, get_ssh_credentials_json_path,
+    get_server_config_json_path, get_ssh_credentials_json_path,
 };
 use serde_json::json;
 use tauri::{AppHandle, Emitter};
@@ -471,7 +471,7 @@ pub async fn upload_to_server(
 
 /// Restart Discord bot only
 #[tauri::command]
-pub async fn restart_discord_bot(app: AppHandle, password: Option<String>) -> Result<bool, String> {
+pub async fn restart_discord_bot(_app: AppHandle, password: Option<String>) -> Result<bool, String> {
     // Get server config
     let config_path = get_server_config_json_path();
     let server_config: ServerConfig = if config_path.exists() {

@@ -10,14 +10,9 @@ use tokio::sync::mpsc;
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
 
-// Windows flag to prevent console window from appearing
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
-/// Result type for worker output
-pub type WorkerResult = Result<WorkerOutput, String>;
-
-/// Output message types from Python workers
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum WorkerMessage {
@@ -37,19 +32,7 @@ pub enum WorkerMessage {
     },
 }
 
-/// Final output from a worker process
-#[derive(Debug, Clone)]
-pub struct WorkerOutput {
-    pub data: serde_json::Value,
-    pub exit_code: i32,
-}
-
-/// Progress callback type
-pub type ProgressCallback = Box<dyn Fn(u8, String) + Send>;
-
-/// Get the path to the Python executable
 pub fn get_python_path() -> String {
-    // Try common Python paths
     #[cfg(target_os = "windows")]
     let paths = ["python", "python3", "py"];
 
@@ -60,7 +43,6 @@ pub fn get_python_path() -> String {
         let mut cmd = std::process::Command::new(path);
         cmd.arg("--version");
 
-        // On Windows, prevent CMD window from appearing
         #[cfg(windows)]
         cmd.creation_flags(CREATE_NO_WINDOW);
 
@@ -74,16 +56,13 @@ pub fn get_python_path() -> String {
 
 /// Get the path to the python_workers directory
 pub fn get_workers_dir() -> std::path::PathBuf {
-    // Get the directory where the executable is located
     if let Ok(exe_path) = std::env::current_exe() {
         if let Some(exe_dir) = exe_path.parent() {
-            // Check for python_workers in the same directory as the executable
             let workers_dir = exe_dir.join("python_workers");
             if workers_dir.exists() {
                 return workers_dir;
             }
 
-            // During development, check parent directories (up to 3 levels)
             let mut current = exe_dir;
             for _ in 0..3 {
                 if let Some(parent) = current.parent() {
@@ -98,24 +77,12 @@ pub fn get_workers_dir() -> std::path::PathBuf {
         }
     }
 
-    // Fallback to current working directory
     let cwd_workers = std::env::current_dir()
         .unwrap_or_default()
         .join("python_workers");
 
     println!("Fallback to current dir python_workers: {:?}", cwd_workers);
     cwd_workers
-}
-
-/// Spawn a Python worker and run it synchronously
-pub fn spawn_python_worker(script: &str, input: serde_json::Value) -> Result<serde_json::Value, String> {
-    // Create a new runtime for blocking execution
-    let rt = tokio::runtime::Runtime::new()
-        .map_err(|e| format!("Failed to create runtime: {}", e))?;
-
-    rt.block_on(async {
-        spawn_python_worker_async(script, input, None).await
-    })
 }
 
 /// Spawn a Python worker asynchronously with optional progress callback
@@ -142,7 +109,6 @@ pub async fn spawn_python_worker_async(
         .stderr(Stdio::piped())
         .kill_on_drop(true);
 
-    // On Windows, prevent CMD window from appearing
     #[cfg(windows)]
     cmd.creation_flags(CREATE_NO_WINDOW);
 
@@ -150,7 +116,6 @@ pub async fn spawn_python_worker_async(
         .spawn()
         .map_err(|e| format!("Failed to spawn Python process: {}", e))?;
 
-    // Write input to stdin
     let input_json = serde_json::to_string(&input)
         .map_err(|e| format!("Failed to serialize input: {}", e))?;
 
@@ -165,7 +130,6 @@ pub async fn spawn_python_worker_async(
             .map_err(|e| format!("Failed to close stdin: {}", e))?;
     }
 
-    // Read stdout line by line
     let stdout = child
         .stdout
         .take()
@@ -176,11 +140,9 @@ pub async fn spawn_python_worker_async(
     let mut last_error: Option<String> = None;
 
     while let Ok(Some(line)) = reader.next_line().await {
-        // Try to parse as WorkerMessage
         if let Ok(message) = serde_json::from_str::<WorkerMessage>(&line) {
             match &message {
                 WorkerMessage::Progress { .. } => {
-                    // Send progress to callback without terminal printing
                     if let Some(ref tx) = progress_callback {
                         let _ = tx.send(message.clone()).await;
                     }
@@ -192,12 +154,10 @@ pub async fn spawn_python_worker_async(
                     last_error = Some(message.clone());
                 }
                 WorkerMessage::Log { level, message } => {
-                    // Only print internal logs to console, not stdout/stderr (those go to UI)
                     if level != "stdout" && level != "stderr" {
                         println!("[Python {}] {}", level, message);
                     }
-                    // Only forward stdout/stderr to UI, skip internal info/warning logs
-                    if (level == "stdout" || level == "stderr") {
+                    if level == "stdout" || level == "stderr" {
                         if let Some(ref tx) = progress_callback {
                             let _ = tx.send(WorkerMessage::Log {
                                 level: level.clone(),
@@ -208,12 +168,10 @@ pub async fn spawn_python_worker_async(
                 }
             }
         } else {
-            // Not a JSON message, treat as plain log
             println!("[Python] {}", line);
         }
     }
 
-    // Wait for the process to finish
     let status = child
         .wait()
         .await
@@ -222,7 +180,6 @@ pub async fn spawn_python_worker_async(
     let exit_code = status.code().unwrap_or(-1);
     println!("Python worker exited with code: {}", exit_code);
 
-    // Check for errors
     if let Some(error) = last_error {
         return Err(error);
     }
@@ -231,6 +188,5 @@ pub async fn spawn_python_worker_async(
         return Err(format!("Python worker exited with code: {}", exit_code));
     }
 
-    // Return the result
     last_result.ok_or_else(|| "No result from Python worker".to_string())
 }

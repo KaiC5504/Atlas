@@ -1,4 +1,3 @@
-// Game Launcher data structures
 use serde::{Deserialize, Serialize};
 
 /// Source of a detected game
@@ -25,24 +24,24 @@ pub struct DetectedGame {
     pub executable_path: String,
     pub install_path: String,
     pub source: GameSource,
-    pub app_id: Option<String>,  // Steam app ID or HoyoPlay game ID
+    pub app_id: Option<String>,  
     pub icon_path: Option<String>,
 }
 
-/// A game in the user's library
+/// Game in the user's library
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LibraryGame {
-    pub id: String,              // Unique identifier (UUID)
+    pub id: String,              
     pub name: String,
     pub executable_path: String,
     pub install_path: String,
     pub source: GameSource,
     pub app_id: Option<String>,
     pub icon_path: Option<String>,
-    pub process_name: String,    // Process name for tracking (e.g., "GenshinImpact.exe")
-    pub added_at: String,        // ISO 8601 timestamp
-    pub last_played: Option<String>,  // ISO 8601 timestamp
-    pub total_playtime_seconds: u64,  // Total play time in seconds
+    pub process_name: String,    
+    pub added_at: String,        
+    pub last_played: Option<String>,  
+    pub total_playtime_seconds: u64,  
 }
 
 /// The complete game library
@@ -64,6 +63,7 @@ impl GameLibrary {
         self.games.iter_mut().find(|g| g.id == id)
     }
 
+    #[allow(dead_code)]
     pub fn find_by_process_name(&self, process_name: &str) -> Option<&LibraryGame> {
         self.games.iter().find(|g|
             g.process_name.to_lowercase() == process_name.to_lowercase()
@@ -87,12 +87,12 @@ impl GameLibrary {
     }
 }
 
-/// HoyoPlay game configuration (known games)
 #[derive(Debug, Clone)]
 pub struct HoyoPlayGameConfig {
     pub name: &'static str,
     pub folder_name: &'static str,
     pub executable_name: &'static str,
+    #[allow(dead_code)] 
     pub process_name: &'static str,
 }
 

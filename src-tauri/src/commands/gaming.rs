@@ -1,12 +1,10 @@
-// Gaming Performance Analyzer Tauri commands
-
 use std::fs;
 use std::sync::Arc;
 use tauri::{AppHandle, State};
 
 use crate::file_manager::{read_json_file, write_json_file};
 use crate::gaming::{
-    is_detection_running, start_game_detection, stop_game_detection, BottleneckAnalyzer,
+    is_detection_running, start_game_detection, stop_game_detection,
     GameDetectionState, GamingSessionManager,
 };
 use crate::performance::MonitoringState;
@@ -15,10 +13,6 @@ use crate::utils::{
     get_bottleneck_thresholds_json_path, get_game_whitelist_json_path,
     get_gaming_sessions_json_path, get_session_data_path,
 };
-
-// ============================================
-// Whitelist Commands
-// ============================================
 
 /// Get the current game whitelist
 #[tauri::command]
@@ -85,10 +79,6 @@ pub fn toggle_game_enabled(process_name: String, enabled: bool) -> Result<(), St
     }
 }
 
-// ============================================
-// Detection Commands
-// ============================================
-
 /// Start game detection monitoring
 #[tauri::command]
 pub fn start_gaming_detection(
@@ -121,10 +111,6 @@ pub fn is_gaming_detection_running(
 ) -> bool {
     is_detection_running((*detection_state).clone())
 }
-
-// ============================================
-// Session Commands
-// ============================================
 
 /// Get the currently active gaming session
 #[tauri::command]
@@ -173,10 +159,6 @@ pub fn end_gaming_session(
 ) -> Result<GamingSession, String> {
     session_manager.end_session()
 }
-
-// ============================================
-// Threshold Commands
-// ============================================
 
 /// Get bottleneck detection thresholds
 #[tauri::command]
