@@ -21,7 +21,7 @@ import { NavigationSettingsProvider } from './contexts';
 import './App.css';
 
 function App() {
-  const { state, checkForUpdate, downloadAndInstall, dismissUpdate } = useUpdater();
+  const { state, checkForUpdate, downloadUpdate, installUpdate, dismissUpdate } = useUpdater();
   const navigate = useNavigate();
 
   // Check for updates on app startup
@@ -90,8 +90,8 @@ function App() {
         {/* Update toast notification */}
         <UpdateToast
           state={state}
-          onDownload={downloadAndInstall}
-          onRestart={downloadAndInstall}
+          onDownload={downloadUpdate}
+          onInstall={installUpdate}
           onDismiss={dismissUpdate}
           onRetry={checkForUpdate}
         />

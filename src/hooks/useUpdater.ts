@@ -1,4 +1,3 @@
-// Auto-update hook
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
@@ -11,7 +10,8 @@ import type {
 export interface UseUpdaterReturn {
   state: UpdateState;
   checkForUpdate: () => Promise<void>;
-  downloadAndInstall: () => Promise<void>;
+  downloadUpdate: () => Promise<void>;
+  installUpdate: () => Promise<void>;
   dismissUpdate: () => void;
   isUpdateAvailable: boolean;
   isDownloading: boolean;
@@ -87,7 +87,6 @@ export function useUpdater(): UseUpdaterReturn {
           error: null,
         });
       } else {
-        // No update available, reset to idle
         setState(initialState);
       }
     } catch (err) {
@@ -100,7 +99,7 @@ export function useUpdater(): UseUpdaterReturn {
     }
   }, []);
 
-  const downloadAndInstall = useCallback(async () => {
+  const downloadUpdate = useCallback(async () => {
     if (state.status !== 'available' && state.status !== 'error') {
       return;
     }
@@ -113,9 +112,29 @@ export function useUpdater(): UseUpdaterReturn {
     }));
 
     try {
-      await invoke('download_and_install_update');
-      // After download_and_install_update completes, the app should restart
-      // If it doesn't, we'll be in 'downloaded' state from the event listener
+      await invoke('download_update');
+    } catch (err) {
+      setState((prev) => ({
+        ...prev,
+        status: 'error',
+        error: err instanceof Error ? err.message : String(err),
+      }));
+    }
+  }, [state.status]);
+
+  const installUpdate = useCallback(async () => {
+    if (state.status !== 'downloaded') {
+      return;
+    }
+
+    setState((prev) => ({
+      ...prev,
+      status: 'installing',
+      error: null,
+    }));
+
+    try {
+      await invoke('install_update');
     } catch (err) {
       setState((prev) => ({
         ...prev,
@@ -139,7 +158,8 @@ export function useUpdater(): UseUpdaterReturn {
   return {
     state,
     checkForUpdate,
-    downloadAndInstall,
+    downloadUpdate,
+    installUpdate,
     dismissUpdate,
     isUpdateAvailable,
     isDownloading,

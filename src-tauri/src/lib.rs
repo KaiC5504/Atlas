@@ -44,7 +44,7 @@ use commands::{
         upload_file_to_server,
     },
     settings::{get_settings, update_settings},
-    updater::{check_for_update, download_and_install_update, get_current_version},
+    updater::{check_for_update, download_update, get_current_version, install_update, DownloadedUpdateBytes},
     valorant::{check_valorant_store, get_store_history, get_valorant_store, should_auto_refresh_store},
 };
 use discord::DiscordPresenceManager;
@@ -114,18 +114,16 @@ pub fn run() {
         .manage(shared_metrics.clone())
         .manage(playtime_tracker_state.clone())
         .manage(discord_manager.clone())
+        .manage(DownloadedUpdateBytes(std::sync::Mutex::new(None)))
         .setup(move |app| {
-            // Check if we just updated and need to bring window to foreground
             let current_version = app.package_info().version.to_string();
             let version_file = get_last_run_version_path();
             let last_version = fs::read_to_string(&version_file).unwrap_or_default();
 
             let just_updated = !last_version.is_empty() && last_version.trim() != current_version;
 
-            // Always save current version for next launch
             let _ = fs::write(&version_file, &current_version);
 
-            // If we just updated, bring the window to the foreground
             if just_updated {
                 println!("App updated from {} to {} - bringing window to foreground", last_version.trim(), current_version);
                 if let Some(window) = app.get_webview_window("main") {
@@ -135,7 +133,6 @@ pub fn run() {
                 }
             }
 
-            // Initialize Discord Rich Presence
             let settings = get_settings().unwrap_or_default();
             if settings.discord_rich_presence_enabled {
                 if let Err(e) = discord_manager.connect() {
@@ -234,7 +231,8 @@ pub fn run() {
             update_bottleneck_thresholds,
             // Updater commands
             check_for_update,
-            download_and_install_update,
+            download_update,
+            install_update,
             get_current_version,
             // Game launcher commands
             get_game_library,

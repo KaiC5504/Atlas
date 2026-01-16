@@ -1,10 +1,10 @@
-import { RefreshCw, Download, RotateCcw, X, CheckCircle, AlertCircle } from 'lucide-react';
+import { RefreshCw, Download, PackageCheck, X, CheckCircle, AlertCircle } from 'lucide-react';
 import type { UpdateState } from '../types/updater';
 
 interface UpdateToastProps {
   state: UpdateState;
   onDownload: () => void;
-  onRestart: () => void;
+  onInstall: () => void;
   onDismiss: () => void;
   onRetry: () => void;
 }
@@ -12,7 +12,7 @@ interface UpdateToastProps {
 export function UpdateToast({
   state,
   onDownload,
-  onRestart,
+  onInstall,
   onDismiss,
   onRetry,
 }: UpdateToastProps) {
@@ -123,15 +123,15 @@ export function UpdateToast({
             </button>
           </div>
           <p className="text-text-secondary text-sm mb-3">
-            The update has been downloaded. Restart to apply changes.
+            The update has been downloaded. Install when you're ready.
           </p>
           <div className="flex gap-2">
             <button
-              onClick={onRestart}
+              onClick={onInstall}
               className="btn btn-primary btn-sm flex-1"
             >
-              <RotateCcw size={14} />
-              Restart Now
+              <PackageCheck size={14} />
+              Install Now
             </button>
             <button
               onClick={onDismiss}
@@ -140,6 +140,17 @@ export function UpdateToast({
               Later
             </button>
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (state.status === 'installing') {
+    return (
+      <div className="fixed bottom-4 right-4 z-50 animate-slide-up">
+        <div className="glass-elevated rounded-xl p-4 flex items-center gap-3 shadow-lg min-w-[300px]">
+          <RefreshCw size={20} className="text-accent-primary animate-spin" />
+          <span className="text-text-secondary text-sm">Installing update...</span>
         </div>
       </div>
     );
