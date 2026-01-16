@@ -53,12 +53,13 @@ use gaming::{BottleneckAnalyzer, GameDetectionState, GamingSessionManager};
 use launcher::PlaytimeTrackerState;
 use models::{BottleneckThresholds, GameLibrary, GameWhitelist, GamingSession, QuickActionsConfig, ServerConfig, Settings};
 use performance::{MonitoringState, SharedMetrics};
+use std::fs;
 use std::sync::Arc;
 use tauri::Manager;
 use utils::{
     get_audio_detection_jobs_json_path, get_bottleneck_thresholds_json_path, get_downloads_json_path,
     get_game_library_json_path, get_game_whitelist_json_path, get_gaming_sessions_json_path,
-    get_ml_jobs_json_path, get_quick_actions_json_path, get_server_config_json_path,
+    get_last_run_version_path, get_ml_jobs_json_path, get_quick_actions_json_path, get_server_config_json_path,
     get_settings_json_path, get_valorant_store_json_path, initialize_data_directories,
 };
 
@@ -114,6 +115,26 @@ pub fn run() {
         .manage(playtime_tracker_state.clone())
         .manage(discord_manager.clone())
         .setup(move |app| {
+            // Check if we just updated and need to bring window to foreground
+            let current_version = app.package_info().version.to_string();
+            let version_file = get_last_run_version_path();
+            let last_version = fs::read_to_string(&version_file).unwrap_or_default();
+
+            let just_updated = !last_version.is_empty() && last_version.trim() != current_version;
+
+            // Always save current version for next launch
+            let _ = fs::write(&version_file, &current_version);
+
+            // If we just updated, bring the window to the foreground
+            if just_updated {
+                println!("App updated from {} to {} - bringing window to foreground", last_version.trim(), current_version);
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.show();
+                    let _ = window.unminimize();
+                    let _ = window.set_focus();
+                }
+            }
+
             // Initialize Discord Rich Presence
             let settings = get_settings().unwrap_or_default();
             if settings.discord_rich_presence_enabled {

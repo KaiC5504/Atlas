@@ -122,6 +122,10 @@ pub fn get_music_index_json_path() -> PathBuf {
     get_music_dir().join("index.json")
 }
 
+pub fn get_last_run_version_path() -> PathBuf {
+    get_data_dir().join("last_run_version.txt")
+}
+
 pub fn initialize_data_directories() -> Result<(), String> {
     let directories = [
         get_data_dir(),

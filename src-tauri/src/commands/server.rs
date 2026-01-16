@@ -151,13 +151,22 @@ pub async fn execute_ssh_command(
     let session_id = Uuid::new_v4().to_string();
     let started_at = Utc::now().to_rfc3339();
 
+    let final_command = if command.contains("pm2") {
+        format!(
+            "export PATH=\"/root/.nvm/versions/node/v24.13.0/bin:$PATH\" && {}",
+            command
+        )
+    } else {
+        command.clone()
+    };
+
     // Prepare input for Python worker
     let worker_input = json!({
         "host": server_config.host,
         "port": server_config.port,
         "username": server_config.username,
         "password": ssh_password,
-        "command": command,
+        "command": final_command,
         "session_id": session_id
     });
 
