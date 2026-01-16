@@ -41,6 +41,8 @@ class VPSSyncManager:
         self.client: Optional[paramiko.SSHClient] = None
         self.sftp: Optional[paramiko.SFTPClient] = None
 
+        self._remote_dir_cache: dict = {}
+
     def connect(self, host: str, port: int, username: str, password: str) -> tuple:
         """Connect to VPS via SSH. Returns (success, error_message)."""
         try:
@@ -76,6 +78,22 @@ class VPSSyncManager:
         if self.client:
             self.client.close()
             self.client = None
+        # Clear cache on disconnect
+        self._remote_dir_cache.clear()
+
+    def _get_remote_files_cached(self, remote_dir: str) -> set:
+        """Get cached remote directory listing. Fetches once per session."""
+        if remote_dir not in self._remote_dir_cache:
+            try:
+                self._remote_dir_cache[remote_dir] = set(self.sftp.listdir(remote_dir))
+            except Exception:
+                self._remote_dir_cache[remote_dir] = set()
+        return self._remote_dir_cache[remote_dir]
+
+    def _invalidate_remote_cache(self, remote_dir: str) -> None:
+        """Invalidate cache for a specific directory after upload."""
+        if remote_dir in self._remote_dir_cache:
+            del self._remote_dir_cache[remote_dir]
 
     def _ensure_remote_dir(self, remote_path: str) -> None:
         """Ensure remote directory exists."""
@@ -217,10 +235,7 @@ class VPSSyncManager:
         try:
             self._ensure_remote_dir(REMOTE_TRACKS_DIR)
 
-            try:
-                remote_files = set(self.sftp.listdir(REMOTE_TRACKS_DIR))
-            except Exception:
-                remote_files = set()
+            remote_files = self._get_remote_files_cached(REMOTE_TRACKS_DIR)
 
             for i, track_id in enumerate(track_ids):
                 filename = f"{track_id}.opus"
@@ -241,6 +256,9 @@ class VPSSyncManager:
                     uploaded += 1
                 except Exception:
                     pass
+
+            if uploaded > 0:
+                self._invalidate_remote_cache(REMOTE_TRACKS_DIR)
 
         except Exception:
             pass

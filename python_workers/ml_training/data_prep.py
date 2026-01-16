@@ -1,7 +1,3 @@
-"""
-Data preparation pipeline for audio event detection training.
-Creates training dataset from raw audio files based on a manifest.
-"""
 import json
 import numpy as np
 from pathlib import Path
@@ -17,9 +13,9 @@ from common.audio_types import (
     TrainingManifest, TrainingSample, SAMPLE_RATE
 )
 from ml_training.audio_utils import (
-    preprocess_audio, segment_audio, is_valid_audio_file, has_sufficient_energy
+    preprocess_audio, is_valid_audio_file, calculate_rms_energy
 )
-from ml_training.feature_extraction import extract_mel_spectrogram
+from ml_training.feature_extraction import extract_windows_from_full_spectrogram
 
 
 def create_training_dataset(
@@ -31,44 +27,7 @@ def create_training_dataset(
     min_energy: float = 0.01,
     seed: int = 42
 ) -> Dict:
-    """
-    Create training dataset from manifest file.
-
-    Process:
-    1. Load manifest JSON
-    2. For each audio file:
-       a. Preprocess audio
-       b. Segment into windows
-       c. Extract mel spectrograms
-       d. Save as .npy files with labels
-    3. Create train/val split
-    4. Save dataset metadata
-
-    Output structure:
-    output_dir/
-      train/
-        positive/
-          sample_0001.npy
-          sample_0002.npy
-        negative/
-          sample_0001.npy
-      val/
-        positive/
-        negative/
-      metadata.json
-
-    Args:
-        manifest_path: Path to training manifest JSON
-        output_dir: Directory to save dataset
-        window_size_ms: Window size in milliseconds
-        hop_size_ms: Hop size in milliseconds
-        val_split: Fraction of data for validation
-        min_energy: Minimum RMS energy threshold
-        seed: Random seed for reproducibility
-
-    Returns:
-        Dataset metadata dictionary
-    """
+    
     random.seed(seed)
     np.random.seed(seed)
 
@@ -122,7 +81,7 @@ def create_training_dataset(
     stats['negative']['total_windows'] = len(neg_windows)
     stats['negative']['files'] = len(manifest.negative_samples)
 
-    # Process hard negatives (more valuable - add to negatives)
+    # Process hard negatives
     print("Processing hard negative samples...")
     hard_neg_windows = process_samples(
         manifest.hard_negatives,
@@ -204,19 +163,7 @@ def process_samples(
     hop_samples: int,
     min_energy: float
 ) -> List[Tuple[np.ndarray, int]]:
-    """
-    Process a list of audio samples into mel spectrogram windows.
-
-    Args:
-        samples: List of training samples
-        label: Label for all samples (0 or 1)
-        window_samples: Window size in samples
-        hop_samples: Hop size in samples
-        min_energy: Minimum energy threshold
-
-    Returns:
-        List of (spectrogram, label) tuples
-    """
+   
     windows = []
 
     for sample in tqdm(samples, desc=f"Processing {'positive' if label == 1 else 'negative'} samples"):
@@ -231,18 +178,18 @@ def process_samples(
             # Load and preprocess audio
             audio = preprocess_audio(file_path)
 
-            # Segment into windows
-            audio_windows = segment_audio(audio, window_samples, hop_samples)
+            # Quick energy check on full audio before processing
+            if calculate_rms_energy(audio) < min_energy:
+                print(f"  Skipping low-energy file: {file_path}")
+                continue
 
-            # Extract mel spectrograms for each window
-            for window in audio_windows:
-                # Skip windows with insufficient energy (silence)
-                if not has_sufficient_energy(window, min_energy):
-                    continue
+            # OPTIMIZATION: Compute full spectrogram once and slice windows
+            mel_windows = extract_windows_from_full_spectrogram(
+                audio, window_samples, hop_samples
+            )
 
-                # Extract mel spectrogram
-                mel_spec = extract_mel_spectrogram(window)
-
+            # Add all windows with the label
+            for mel_spec in mel_windows:
                 windows.append((mel_spec, label))
 
         except Exception as e:
@@ -257,26 +204,14 @@ def save_samples(
     output_dir: Path,
     prefix: str
 ) -> None:
-    """
-    Save samples as .npy files.
 
-    Args:
-        samples: List of (spectrogram, label) tuples
-        output_dir: Directory to save files
-        prefix: File name prefix
-    """
     for i, (spec, label) in enumerate(tqdm(samples, desc="Saving samples")):
         filename = f"{prefix}_{i:06d}.npy"
         np.save(output_dir / filename, spec)
 
 
 def create_manifest_template(output_path: str) -> None:
-    """
-    Create a template manifest file for the user to fill in.
 
-    Args:
-        output_path: Path to save template manifest
-    """
     template = {
         "positive_samples": [
             {"file": "/path/to/target_audio_clip_1.mp3", "label": "target_audio", "source": "creator_a"},
@@ -299,15 +234,7 @@ def create_manifest_template(output_path: str) -> None:
 
 
 def validate_manifest(manifest_path: str) -> Tuple[bool, List[str]]:
-    """
-    Validate a manifest file and check that all referenced files exist.
 
-    Args:
-        manifest_path: Path to manifest file
-
-    Returns:
-        Tuple of (is_valid, list of error messages)
-    """
     errors = []
 
     try:

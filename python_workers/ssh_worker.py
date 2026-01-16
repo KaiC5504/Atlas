@@ -143,7 +143,6 @@ class SSHWorker(WorkerBase):
         }
 
     def get_system_status(self) -> Dict[str, Any]:
-        """Get system status information from the server."""
         write_log("Fetching system status")
 
         status = {
@@ -157,43 +156,57 @@ class SSHWorker(WorkerBase):
         }
 
         try:
-            # Get uptime and load average
-            _, stdout, _ = self.client.exec_command("uptime")
-            uptime_output = stdout.read().decode().strip()
+            combined_cmd = (
+                "echo '---UPTIME---' && uptime && "
+                "echo '---MEMORY---' && free -h | grep Mem && "
+                "echo '---DISK---' && df -h / | tail -1 && "
+                "echo '---CPU---' && top -bn1 | grep 'Cpu(s)' | head -1"
+            )
+            _, stdout, _ = self.client.exec_command(combined_cmd)
+            output = stdout.read().decode()
 
-            # Parse uptime
-            uptime_match = re.search(r'up\s+(.+?),\s+\d+\s+user', uptime_output)
-            if uptime_match:
-                status["uptime"] = uptime_match.group(1)
+            # Parse combined output by section markers
+            sections = {}
+            current_section = None
+            for line in output.strip().split('\n'):
+                line = line.strip()
+                if line.startswith('---') and line.endswith('---'):
+                    current_section = line[3:-3]
+                    sections[current_section] = []
+                elif current_section and line:
+                    sections[current_section].append(line)
 
-            # Parse load average
-            load_match = re.search(r'load average:\s+([\d.]+)', uptime_output)
-            if load_match:
-                status["load_average"] = load_match.group(1)
+            # Parse uptime section
+            if 'UPTIME' in sections and sections['UPTIME']:
+                uptime_output = sections['UPTIME'][0]
+                uptime_match = re.search(r'up\s+(.+?),\s+\d+\s+user', uptime_output)
+                if uptime_match:
+                    status["uptime"] = uptime_match.group(1)
+                load_match = re.search(r'load average:\s+([\d.]+)', uptime_output)
+                if load_match:
+                    status["load_average"] = load_match.group(1)
 
-            # Get memory info
-            _, stdout, _ = self.client.exec_command("free -h | grep Mem")
-            mem_output = stdout.read().decode().strip()
-            mem_parts = mem_output.split()
-            if len(mem_parts) >= 3:
-                status["memory_total"] = mem_parts[1]
-                status["memory_used"] = mem_parts[2]
+            # Parse memory section
+            if 'MEMORY' in sections and sections['MEMORY']:
+                mem_parts = sections['MEMORY'][0].split()
+                if len(mem_parts) >= 3:
+                    status["memory_total"] = mem_parts[1]
+                    status["memory_used"] = mem_parts[2]
 
-            # Get disk usage
-            _, stdout, _ = self.client.exec_command("df -h / | tail -1")
-            disk_output = stdout.read().decode().strip()
-            disk_parts = disk_output.split()
-            if len(disk_parts) >= 4:
-                status["disk_total"] = disk_parts[1]
-                status["disk_used"] = disk_parts[2]
+            # Parse disk section
+            if 'DISK' in sections and sections['DISK']:
+                disk_parts = sections['DISK'][0].split()
+                if len(disk_parts) >= 4:
+                    status["disk_total"] = disk_parts[1]
+                    status["disk_used"] = disk_parts[2]
 
-            # Get CPU usage (simple approach using top)
-            _, stdout, _ = self.client.exec_command("top -bn1 | grep 'Cpu(s)' | head -1")
-            cpu_output = stdout.read().decode().strip()
-            cpu_match = re.search(r'(\d+\.?\d*)\s*%?\s*id', cpu_output)
-            if cpu_match:
-                idle = float(cpu_match.group(1))
-                status["cpu_usage"] = f"{100 - idle:.1f}%"
+            # Parse CPU section
+            if 'CPU' in sections and sections['CPU']:
+                cpu_output = sections['CPU'][0]
+                cpu_match = re.search(r'(\d+\.?\d*)\s*%?\s*id', cpu_output)
+                if cpu_match:
+                    idle = float(cpu_match.group(1))
+                    status["cpu_usage"] = f"{100 - idle:.1f}%"
 
             write_log("System status fetched successfully")
 

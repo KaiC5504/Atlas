@@ -1,9 +1,9 @@
-// Game Launcher hook
-
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import type { GameLibrary, DetectedGame, AddGameRequest, LibraryGame } from '../types';
+
+const CACHE_TTL_MS = 30000;
 
 export interface UseGameLauncherReturn {
   library: GameLibrary;
@@ -25,17 +25,29 @@ export function useGameLauncher(): UseGameLauncherReturn {
   const [isScanning, setIsScanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const loadLibrary = useCallback(async () => {
+  const lastFetchRef = useRef<number>(0);
+
+  const loadLibrary = useCallback(async (force = false) => {
+    const now = Date.now();
+    if (!force && lastFetchRef.current > 0 && (now - lastFetchRef.current) < CACHE_TTL_MS) {
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
     try {
       const lib = await invoke<GameLibrary>('get_game_library');
       setLibrary(lib);
+      lastFetchRef.current = Date.now();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setIsLoading(false);
     }
+  }, []);
+
+  const invalidateCache = useCallback(() => {
+    lastFetchRef.current = 0;
   }, []);
 
   const scanForGames = useCallback(async (): Promise<DetectedGame[]> => {
@@ -57,41 +69,44 @@ export function useGameLauncher(): UseGameLauncherReturn {
     try {
       const lib = await invoke<GameLibrary>('add_detected_games', { games });
       setLibrary(lib);
+      invalidateCache(); 
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
-  }, []);
+  }, [invalidateCache]);
 
   const addManualGame = useCallback(async (request: AddGameRequest) => {
     setError(null);
     try {
       const lib = await invoke<GameLibrary>('add_manual_game', { request });
       setLibrary(lib);
+      invalidateCache(); 
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
-  }, []);
+  }, [invalidateCache]);
 
   const removeGame = useCallback(async (gameId: string) => {
     setError(null);
     try {
       const lib = await invoke<GameLibrary>('remove_game_from_library', { gameId });
       setLibrary(lib);
+      invalidateCache(); 
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
-  }, []);
+  }, [invalidateCache]);
 
   const launchGame = useCallback(async (gameId: string) => {
     setError(null);
     try {
       await invoke('launch_game', { gameId });
-      // Reload library to get updated last_played
-      await loadLibrary();
+      invalidateCache();
+      await loadLibrary(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
-  }, [loadLibrary]);
+  }, [loadLibrary, invalidateCache]);
 
   const getGameById = useCallback((gameId: string): LibraryGame | undefined => {
     return library.games.find(g => g.id === gameId);
@@ -102,21 +117,22 @@ export function useGameLauncher(): UseGameLauncherReturn {
     loadLibrary();
   }, [loadLibrary]);
 
-  // Listen for game events
   useEffect(() => {
     const unlistenStarted = listen<string>('launcher:game_started', () => {
-      loadLibrary();
+      invalidateCache();
+      loadLibrary(true);
     });
 
     const unlistenStopped = listen<{ game_id: string; session_seconds: number }>('launcher:game_stopped', () => {
-      loadLibrary();
+      invalidateCache();
+      loadLibrary(true);
     });
 
     return () => {
       unlistenStarted.then(fn => fn());
       unlistenStopped.then(fn => fn());
     };
-  }, [loadLibrary]);
+  }, [loadLibrary, invalidateCache]);
 
   return {
     library,

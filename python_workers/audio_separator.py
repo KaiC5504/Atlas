@@ -14,17 +14,42 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from common import WorkerBase, run_worker, write_progress, write_log
 
-# Import demucs (will fail gracefully if not installed)
-try:
-    import torch
-    import torchaudio
-    import librosa
-    import numpy as np
-    from demucs.pretrained import get_model
-    from demucs.apply import apply_model
-    HAS_DEMUCS = True
-except ImportError:
-    HAS_DEMUCS = False
+# Lazy import flag 
+HAS_DEMUCS = None 
+_torch = None
+_torchaudio = None
+_librosa = None
+_np = None
+_demucs_get_model = None
+_demucs_apply_model = None
+
+
+def _lazy_import_demucs():
+    """Lazy import heavy ML modules only when needed."""
+    global HAS_DEMUCS, _torch, _torchaudio, _librosa, _np, _demucs_get_model, _demucs_apply_model
+
+    if HAS_DEMUCS is not None:
+        return HAS_DEMUCS
+
+    try:
+        import torch
+        import torchaudio
+        import librosa
+        import numpy as np
+        from demucs.pretrained import get_model
+        from demucs.apply import apply_model
+
+        _torch = torch
+        _torchaudio = torchaudio
+        _librosa = librosa
+        _np = np
+        _demucs_get_model = get_model
+        _demucs_apply_model = apply_model
+        HAS_DEMUCS = True
+    except ImportError:
+        HAS_DEMUCS = False
+
+    return HAS_DEMUCS
 
 
 class AudioSeparatorWorker(WorkerBase):
@@ -56,7 +81,8 @@ class AudioSeparatorWorker(WorkerBase):
         self.device = None
 
     def validate_input(self, input_data: Dict[str, Any]) -> None:
-        if not HAS_DEMUCS:
+        # Lazy import on first validation
+        if not _lazy_import_demucs():
             raise ValueError("Demucs is not installed. Run: pip install demucs")
 
         if "input_file" not in input_data:
@@ -70,17 +96,17 @@ class AudioSeparatorWorker(WorkerBase):
         if not input_file.exists():
             raise ValueError(f"Input file not found: {input_file}")
 
-    def _get_device(self) -> torch.device:
+    def _get_device(self):
         """Determine the best device to use (GPU if available)."""
-        if torch.cuda.is_available():
+        if _torch.cuda.is_available():
             write_log("Using CUDA GPU for inference")
-            return torch.device("cuda")
-        elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+            return _torch.device("cuda")
+        elif hasattr(_torch.backends, "mps") and _torch.backends.mps.is_available():
             write_log("Using Apple MPS GPU for inference")
-            return torch.device("mps")
+            return _torch.device("mps")
         else:
             write_log("Using CPU for inference")
-            return torch.device("cpu")
+            return _torch.device("cpu")
 
     def _load_model(self, model_name: str) -> None:
         """Load the Demucs model."""
@@ -88,7 +114,7 @@ class AudioSeparatorWorker(WorkerBase):
         self.device = self._get_device()
 
         # Load pre-trained model
-        self.model = get_model(model_name)
+        self.model = _demucs_get_model(model_name)
         self.model.to(self.device)
         self.model.eval()
 
@@ -98,22 +124,18 @@ class AudioSeparatorWorker(WorkerBase):
         """Load audio file and prepare for processing."""
         write_progress(10, "Loading audio file...")
 
-        # Load audio using librosa (supports many formats: mp3, m4a, wav, flac, etc.)
-        # sr=None preserves original sample rate, mono=False preserves stereo
-        wav_np, sr = librosa.load(str(input_file), sr=None, mono=False, dtype=np.float32)
+        wav_np, sr = _librosa.load(str(input_file), sr=None, mono=False, dtype=_np.float32)
 
-        # librosa.load returns (n_samples,) for mono, (2, n_samples) for stereo
-        # Ensure we have 2D shape (channels, samples)
         if wav_np.ndim == 1:
             wav_np = wav_np.reshape(1, -1)
 
         # Convert to torch tensor
-        wav = torch.from_numpy(wav_np)
+        wav = _torch.from_numpy(wav_np)
 
         # Resample if needed (Demucs expects 44100 Hz)
         if sr != self.model.samplerate:
             write_log(f"Resampling from {sr} Hz to {self.model.samplerate} Hz")
-            resampler = torchaudio.transforms.Resample(sr, self.model.samplerate)
+            resampler = _torchaudio.transforms.Resample(sr, self.model.samplerate)
             wav = resampler(wav)
             sr = self.model.samplerate
 
@@ -123,7 +145,7 @@ class AudioSeparatorWorker(WorkerBase):
 
         return wav, sr
 
-    def _separate_audio(self, wav: torch.Tensor) -> torch.Tensor:
+    def _separate_audio(self, wav):
         """Run the separation model."""
         write_progress(20, "Separating audio stems...")
 
@@ -133,8 +155,8 @@ class AudioSeparatorWorker(WorkerBase):
         wav = wav.unsqueeze(0).to(self.device)
 
         # Apply model
-        with torch.no_grad():
-            sources = apply_model(
+        with _torch.no_grad():
+            sources = _demucs_apply_model(
                 self.model,
                 wav,
                 device=self.device,
@@ -149,7 +171,7 @@ class AudioSeparatorWorker(WorkerBase):
 
     def _save_stems(
         self,
-        sources: torch.Tensor,
+        sources,
         output_dir: Path,
         input_file: Path,
         sr: int
@@ -173,7 +195,7 @@ class AudioSeparatorWorker(WorkerBase):
             stem_audio = sources[idx]
 
             # Save as WAV
-            torchaudio.save(
+            _torchaudio.save(
                 str(output_path),
                 stem_audio.cpu(),
                 sr,

@@ -265,17 +265,7 @@ class AudioEventDetector(WorkerBase):
         model: 'ort.InferenceSession',
         config: ModelConfig
     ) -> List[Tuple[float, float]]:
-        """
-        Run sliding window inference on audio with GPU batch processing.
-
-        Args:
-            audio: Audio samples as numpy array
-            model: ONNX Runtime inference session
-            config: Model configuration
-
-        Returns:
-            List of (window_start_seconds, probability) tuples
-        """
+       
         import librosa
 
         sr = SAMPLE_RATE
@@ -289,54 +279,62 @@ class AudioEventDetector(WorkerBase):
 
         # Check if using GPU for batch processing
         using_gpu = 'CUDAExecutionProvider' in model.get_providers()
-        batch_size = 32 if using_gpu else 1  # Process 32 windows at once on GPU
+        batch_size = 32 if using_gpu else 8
 
         write_log(f"Batch size: {batch_size} ({'GPU' if using_gpu else 'CPU'})", "info")
 
+        # OPTIMIZATION: Compute full mel spectrogram once for entire audio
+        write_log("Computing full mel spectrogram (batched optimization)...", "info")
+        full_mel_spec = librosa.feature.melspectrogram(
+            y=audio, sr=sr, n_mels=n_mels,
+            n_fft=n_fft, hop_length=hop_length
+        )
+        full_mel_spec_db = librosa.power_to_db(full_mel_spec, ref=np.max)
+
+        # Calculate frame indices for each window
+        # Each audio sample window corresponds to a range of spectrogram frames
+        frames_per_window = int(window_samples / hop_length)
+        frames_per_hop = int(hop_samples / hop_length)
+
         predictions = []
-        total_windows = max(1, (len(audio) - window_samples) // hop_samples + 1)
+        total_windows = max(1, (full_mel_spec_db.shape[1] - frames_per_window) // frames_per_hop + 1)
 
-        # Prepare batches
-        window_starts = list(range(0, len(audio) - window_samples + 1, hop_samples))
+        # Prepare window frame indices
+        window_frame_starts = list(range(0, full_mel_spec_db.shape[1] - frames_per_window + 1, frames_per_hop))
 
-        for batch_idx in range(0, len(window_starts), batch_size):
-            batch_starts = window_starts[batch_idx:batch_idx + batch_size]
+        for batch_idx in range(0, len(window_frame_starts), batch_size):
+            batch_frame_starts = window_frame_starts[batch_idx:batch_idx + batch_size]
             batch_features = []
 
-            # Extract features for batch
-            for start in batch_starts:
-                # Extract window
-                window = audio[start:start + window_samples]
+            # Slice windows from pre-computed spectrogram (fast!)
+            for frame_start in batch_frame_starts:
+                # Slice the spectrogram window
+                mel_window = full_mel_spec_db[:, frame_start:frame_start + frames_per_window]
 
-                # Compute mel spectrogram
-                mel_spec = librosa.feature.melspectrogram(
-                    y=window, sr=sr, n_mels=n_mels,
-                    n_fft=n_fft, hop_length=hop_length
-                )
-                mel_spec_db = librosa.power_to_db(mel_spec, ref=np.max)
+                # Pad if needed (edge case at end)
+                if mel_window.shape[1] < frames_per_window:
+                    mel_window = np.pad(mel_window, ((0, 0), (0, frames_per_window - mel_window.shape[1])))
 
-                # Normalize
-                mel_spec_db = (mel_spec_db - mel_spec_db.mean()) / (mel_spec_db.std() + 1e-8)
+                # Normalize per-window
+                mel_window = (mel_window - mel_window.mean()) / (mel_window.std() + 1e-8)
+                batch_features.append(mel_window)
 
-                # Add to batch: (128, 32)
-                batch_features.append(mel_spec_db)
-
-            # Stack into batch tensor: (batch_size, 1, 128, 32)
+            # Stack into batch tensor: (batch_size, 1, 128, frames_per_window)
             batch_input = np.array(batch_features)[:, np.newaxis, :, :].astype(np.float32)
 
             # Run batch inference
             outputs = model.run(None, {'mel_spectrogram': batch_input})
             batch_probs = outputs[0][:, 0]  # Extract probabilities
 
-            # Record predictions
-            for i, (start, prob) in enumerate(zip(batch_starts, batch_probs)):
-                window_start_sec = start / sr
+            # Record predictions with correct time mapping
+            for i, (frame_start, prob) in enumerate(zip(batch_frame_starts, batch_probs)):
+                # Convert frame index back to time in seconds
+                window_start_sec = (frame_start * hop_length) / sr
                 predictions.append((window_start_sec, float(prob)))
 
-            # Emit progress more frequently
-            progress = batch_idx + len(batch_starts)
-            # Update every batch on GPU (every 32 windows), or every 10 windows on CPU
-            update_frequency = batch_size if using_gpu else 10
+            # Emit progress
+            progress = batch_idx + len(batch_frame_starts)
+            update_frequency = batch_size
             if progress % update_frequency == 0 or progress >= total_windows:
                 percent = int((progress / total_windows) * 55) + 20  # 20-75% for inference
                 write_progress(percent, f"Running inference... ({progress}/{total_windows} windows)")

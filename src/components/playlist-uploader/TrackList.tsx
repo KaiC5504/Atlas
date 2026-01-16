@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useDeferredValue } from 'react';
 import { Search, CheckSquare, Square, Music } from 'lucide-react';
 import { TrackItem } from './TrackItem';
 import { CustomSelect } from '../ui';
@@ -22,6 +22,7 @@ export function TrackList({
   onPlaylistFilterChange,
 }: TrackListProps) {
   const [searchQuery, setSearchQuery] = useState('');
+  const deferredSearchQuery = useDeferredValue(searchQuery);
 
   // Convert index to array of [trackId, track] pairs
   const tracks = useMemo(() => {
@@ -31,9 +32,8 @@ export function TrackList({
   const filteredTracks = useMemo(() => {
     let result = tracks;
 
-    // Filter by search query
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
+    if (deferredSearchQuery.trim()) {
+      const query = deferredSearchQuery.toLowerCase();
       result = result.filter(
         ([, track]) =>
           track.title.toLowerCase().includes(query) ||
@@ -45,7 +45,7 @@ export function TrackList({
     }
 
     return result.sort(([, a], [, b]) => a.title.localeCompare(b.title));
-  }, [tracks, searchQuery]);
+  }, [tracks, deferredSearchQuery]);
 
   const handleToggle = (id: string) => {
     if (selectedTracks.includes(id)) {

@@ -1,13 +1,50 @@
-// Download command handlers - real implementation with file storage
 use crate::file_manager::{read_json_file, write_json_file};
 use crate::models::{Download, DownloadStatus, Settings};
 use crate::process_manager::{spawn_python_worker_async, WorkerMessage};
 use crate::utils::{get_downloads_json_path, get_settings_json_path, get_videos_dir};
+use parking_lot::RwLock;
 use serde::Serialize;
 use std::fs;
 use std::path::PathBuf;
+use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter};
 use tokio::sync::mpsc;
+
+struct DownloadsCache {
+    data: Option<Vec<Download>>,
+    last_updated: Option<Instant>,
+}
+
+impl DownloadsCache {
+    const TTL: Duration = Duration::from_secs(5);
+
+    fn new() -> Self {
+        Self { data: None, last_updated: None }
+    }
+
+    fn get(&self) -> Option<&Vec<Download>> {
+        if let (Some(data), Some(updated)) = (&self.data, self.last_updated) {
+            if updated.elapsed() < Self::TTL {
+                return Some(data);
+            }
+        }
+        None
+    }
+
+    fn set(&mut self, data: Vec<Download>) {
+        self.data = Some(data);
+        self.last_updated = Some(Instant::now());
+    }
+
+    fn invalidate(&mut self) {
+        self.data = None;
+        self.last_updated = None;
+    }
+}
+
+lazy_static::lazy_static! {
+    static ref DOWNLOADS_CACHE: RwLock<DownloadsCache> = RwLock::new(DownloadsCache::new());
+}
 
 /// Progress event payload for frontend
 #[derive(Debug, Clone, Serialize)]
@@ -42,7 +79,7 @@ fn resolve_special_folder(name: &str) -> Option<PathBuf> {
     }
 }
 
-/// Get the download directory from settings, falling back to user's Downloads folder
+/// Get the download directory from settings
 fn get_download_directory() -> PathBuf {
     let settings_path = get_settings_json_path();
 
@@ -51,7 +88,6 @@ fn get_download_directory() -> PathBuf {
             let download_path = settings.download_path.trim();
 
             if !download_path.is_empty() {
-                // First, check if it's a Windows special folder name (Downloads, Desktop, etc.)
                 if let Some(special_path) = resolve_special_folder(download_path) {
                     if !special_path.exists() {
                         let _ = fs::create_dir_all(&special_path);
@@ -59,7 +95,6 @@ fn get_download_directory() -> PathBuf {
                     return special_path;
                 }
 
-                // If it's an absolute path, use it directly
                 let path = PathBuf::from(download_path);
                 if path.is_absolute() {
                     if !path.exists() {
@@ -79,7 +114,6 @@ fn get_download_directory() -> PathBuf {
         }
     }
 
-    // Fall back to user's Downloads folder (not AppData)
     dirs::download_dir().unwrap_or_else(get_videos_dir)
 }
 
@@ -214,19 +248,31 @@ pub fn validate_download_path(path: String) -> DownloadPathValidation {
     }
 }
 
-/// List all downloads from the JSON file
 #[tauri::command]
 pub fn list_downloads() -> Result<Vec<Download>, String> {
+    {
+        let cache = DOWNLOADS_CACHE.read();
+        if let Some(data) = cache.get() {
+            return Ok(data.clone());
+        }
+    }
+
     let path = get_downloads_json_path();
 
     if !path.exists() {
         return Ok(vec![]);
     }
 
-    read_json_file(&path)
+    let downloads: Vec<Download> = read_json_file(&path)?;
+
+    {
+        let mut cache = DOWNLOADS_CACHE.write();
+        cache.set(downloads.clone());
+    }
+
+    Ok(downloads)
 }
 
-/// Add a new download to the queue (does not start downloading)
 #[tauri::command]
 pub fn add_download(url: String, quality: String) -> Result<serde_json::Value, String> {
     let path = get_downloads_json_path();
@@ -247,15 +293,14 @@ pub fn add_download(url: String, quality: String) -> Result<serde_json::Value, S
     // Add new download
     downloads.push(download);
 
-    // Write back to file
     write_json_file(&path, &downloads)?;
+    DOWNLOADS_CACHE.write().invalidate();
 
     println!("Added download: {} with quality: {}", url, quality);
 
     Ok(serde_json::json!({ "job_id": job_id }))
 }
 
-/// Start a pending download (executes the Python worker in background)
 #[tauri::command]
 pub async fn start_download(app: AppHandle, job_id: String) -> Result<serde_json::Value, String> {
     let path = get_downloads_json_path();
@@ -264,7 +309,6 @@ pub async fn start_download(app: AppHandle, job_id: String) -> Result<serde_json
         return Err("No downloads file found".to_string());
     }
 
-    // Check max concurrent downloads limit
     let settings = get_current_settings();
     let active_count = count_active_downloads()?;
 
@@ -277,7 +321,6 @@ pub async fn start_download(app: AppHandle, job_id: String) -> Result<serde_json
 
     let mut downloads: Vec<Download> = read_json_file(&path)?;
 
-    // Find the download and extract needed values
     let (url, quality) = {
         let download = downloads
             .iter_mut()
@@ -298,10 +341,9 @@ pub async fn start_download(app: AppHandle, job_id: String) -> Result<serde_json
         (download.url.clone(), download.quality.clone())
     };
 
-    // Now we can write without holding the mutable borrow
     write_json_file(&path, &downloads)?;
+    DOWNLOADS_CACHE.write().invalidate();
 
-    // Emit status change event
     let _ = app.emit(
         "download:started",
         DownloadStatusEvent {
@@ -316,7 +358,7 @@ pub async fn start_download(app: AppHandle, job_id: String) -> Result<serde_json
     // Create a channel for progress updates
     let (tx, mut rx) = mpsc::channel::<WorkerMessage>(100);
 
-    // Prepare worker input - use download directory from settings
+    // Prepare worker input
     let output_dir = get_download_directory();
     let worker_input = serde_json::json!({
         "url": url,
@@ -348,9 +390,6 @@ pub async fn start_download(app: AppHandle, job_id: String) -> Result<serde_json
                     },
                 );
 
-                // Note: We don't update the JSON file on every progress update
-                // to avoid excessive file I/O. The final state will be saved
-                // when the download completes or fails.
             }
         }
     });
@@ -388,6 +427,7 @@ pub async fn start_download(app: AppHandle, job_id: String) -> Result<serde_json
             download.eta = None;
 
             write_json_file(&path, &downloads)?;
+            DOWNLOADS_CACHE.write().invalidate();
 
             // Emit completion event
             let _ = app.emit(
@@ -412,6 +452,7 @@ pub async fn start_download(app: AppHandle, job_id: String) -> Result<serde_json
             download.error = Some(error.clone());
 
             write_json_file(&path, &downloads)?;
+            DOWNLOADS_CACHE.write().invalidate();
 
             // Emit failure event
             let _ = app.emit(
@@ -435,7 +476,7 @@ fn parse_stage_info(stage: &str) -> (Option<String>, Option<String>) {
     let mut speed = None;
     let mut eta = None;
 
-    // Look for speed pattern like "1.5 MB/s" or "500 KB/s"
+    // Look for speed pattern
     if let Some(start) = stage.find(char::is_numeric) {
         let rest = &stage[start..];
         if rest.contains("MB/s") || rest.contains("KB/s") {
@@ -490,6 +531,7 @@ pub fn cancel_download(job_id: String) -> Result<(), String> {
     }
 
     write_json_file(&path, &downloads)?;
+    DOWNLOADS_CACHE.write().invalidate();
 
     println!("Cancelled download: {}", job_id);
     Ok(())
@@ -527,6 +569,7 @@ pub fn delete_download(job_id: String, delete_file: bool) -> Result<(), String> 
             // Remove from list
             downloads.remove(index);
             write_json_file(&path, &downloads)?;
+            DOWNLOADS_CACHE.write().invalidate();
 
             println!("Deleted download: {}", job_id);
             Ok(())

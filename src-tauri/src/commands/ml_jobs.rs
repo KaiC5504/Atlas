@@ -1,14 +1,15 @@
-// ML Job command handlers - real implementation with file storage
 use crate::file_manager::{read_json_file, write_json_file};
 use crate::models::{MLJob, MLJobStatus, Model, OutputFile};
 use crate::process_manager::{spawn_python_worker_async, WorkerMessage};
 use crate::utils::{get_ml_jobs_json_path, get_models_dir, get_separated_audio_dir};
 use std::fs;
 use std::path::Path;
+use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter};
 use tokio::sync::mpsc;
 
-/// List all ML jobs from the JSON file
+const PROGRESS_WRITE_DEBOUNCE_MS: u64 = 500;
+
 #[tauri::command]
 pub fn list_ml_jobs() -> Result<Vec<MLJob>, String> {
     let path = get_ml_jobs_json_path();
@@ -20,7 +21,6 @@ pub fn list_ml_jobs() -> Result<Vec<MLJob>, String> {
     read_json_file(&path)
 }
 
-/// Submit a new ML job
 #[tauri::command]
 pub fn submit_ml_job(
     input_file: String,
@@ -66,7 +66,6 @@ pub fn submit_ml_job(
     Ok(serde_json::json!({ "job_id": job_id }))
 }
 
-/// Start a pending ML job (executes the Python worker)
 #[tauri::command]
 pub async fn start_ml_job(app: AppHandle, job_id: String) -> Result<serde_json::Value, String> {
     let path = get_ml_jobs_json_path();
@@ -122,20 +121,27 @@ pub async fn start_ml_job(app: AppHandle, job_id: String) -> Result<serde_json::
     let progress_app = app.clone();
     let progress_path = path.clone();
 
-    // Spawn task to handle progress updates
     tokio::spawn(async move {
+        let mut last_write = Instant::now() - Duration::from_millis(PROGRESS_WRITE_DEBOUNCE_MS);
+        let debounce_duration = Duration::from_millis(PROGRESS_WRITE_DEBOUNCE_MS);
+
         while let Some(message) = rx.recv().await {
             if let WorkerMessage::Progress { percent, stage } = message {
-                // Update job in file
-                if let Ok(mut jobs) = read_json_file::<Vec<MLJob>>(&progress_path) {
-                    if let Some(job) = jobs.iter_mut().find(|j| j.id == progress_job_id) {
-                        job.progress = percent;
-                        job.stage = Some(stage.clone());
-                        let _ = write_json_file(&progress_path, &jobs);
+                // Debounce file writes - only write if 500ms elapsed OR job complete (100%)
+                let should_write = percent == 100 || last_write.elapsed() >= debounce_duration;
+
+                if should_write {
+                    // Update job in file
+                    if let Ok(mut jobs) = read_json_file::<Vec<MLJob>>(&progress_path) {
+                        if let Some(job) = jobs.iter_mut().find(|j| j.id == progress_job_id) {
+                            job.progress = percent;
+                            job.stage = Some(stage.clone());
+                            let _ = write_json_file(&progress_path, &jobs);
+                        }
                     }
+                    last_write = Instant::now();
                 }
 
-                // Emit event to frontend
                 let _ = progress_app.emit(
                     "ml-job-progress",
                     serde_json::json!({
@@ -253,8 +259,6 @@ pub fn cancel_ml_job(job_id: String) -> Result<(), String> {
     Ok(())
 }
 
-/// Get available ML models
-/// Checks which models are downloaded in the models directory
 #[tauri::command]
 pub fn get_available_models() -> Result<Vec<Model>, String> {
     let models_dir = get_models_dir();

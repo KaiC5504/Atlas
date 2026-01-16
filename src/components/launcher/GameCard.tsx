@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, memo } from 'react';
 import { Play, Clock } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { LibraryGame, formatPlaytime, getSourceDisplayName } from '../../types';
@@ -9,7 +9,7 @@ interface GameCardProps {
   onClick: (game: LibraryGame) => void;
 }
 
-export function GameCard({ game, onLaunch, onClick }: GameCardProps) {
+export const GameCard = memo(function GameCard({ game, onLaunch, onClick }: GameCardProps) {
   const [iconSrc, setIconSrc] = useState<string | null>(null);
 
   useEffect(() => {
@@ -73,6 +73,6 @@ export function GameCard({ game, onLaunch, onClick }: GameCardProps) {
       </div>
     </div>
   );
-}
+});
 
 export default GameCard;

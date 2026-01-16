@@ -26,10 +26,26 @@ impl Default for GameDetectionState {
     }
 }
 
-/// Load the game whitelist from JSON file
-fn load_game_whitelist() -> GameWhitelist {
-    read_json_file::<GameWhitelist>(&get_game_whitelist_json_path())
-        .unwrap_or_else(|_| GameWhitelist::default_whitelist())
+struct NormalizedGame {
+    name: String,
+    process_name: String,
+    normalized_process: String, 
+    enabled: bool,
+}
+
+fn load_game_whitelist_normalized() -> Vec<NormalizedGame> {
+    let whitelist = read_json_file::<GameWhitelist>(&get_game_whitelist_json_path())
+        .unwrap_or_else(|_| GameWhitelist::default_whitelist());
+
+    whitelist.games.into_iter().map(|g| NormalizedGame {
+        name: g.name,
+        process_name: g.process_name.clone(),
+        normalized_process: g.process_name
+            .trim_end_matches(".exe")
+            .trim_end_matches(".EXE")
+            .to_lowercase(),
+        enabled: g.enabled,
+    }).collect()
 }
 
 /// Start game detection in a background thread
@@ -64,7 +80,7 @@ pub fn start_game_detection(
         }
 
         let mut system = System::new();
-        let whitelist = load_game_whitelist(); // Load once, not every iteration
+        let whitelist = load_game_whitelist_normalized(); // Load once with pre-normalized names
 
         let detected_game = loop {
             if !is_running.load(Ordering::SeqCst) {
@@ -88,13 +104,8 @@ pub fn start_game_detection(
 
             let mut found_game: Option<(String, String)> = None;
 
-            for game in whitelist.games.iter().filter(|g| g.enabled) {
-                let whitelist_name = game.process_name
-                    .trim_end_matches(".exe")
-                    .trim_end_matches(".EXE")
-                    .to_lowercase();
-
-                if running_processes.contains(&whitelist_name) {
+            for game in whitelist.iter().filter(|g| g.enabled) {
+                if running_processes.contains(&game.normalized_process) {
                     found_game = Some((game.name.clone(), game.process_name.clone()));
                     println!("Matched game: {} (process: {})", game.name, game.process_name);
                     break;

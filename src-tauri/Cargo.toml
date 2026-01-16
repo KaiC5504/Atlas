@@ -24,6 +24,7 @@ dirs = "5"
 tokio = { version = "1", features = ["process", "io-util", "time", "rt-multi-thread"] }
 thiserror = "1"
 lazy_static = "1"
+parking_lot = "0.12"
 cookie = "0.18"
 url = "2"
 # Performance monitoring

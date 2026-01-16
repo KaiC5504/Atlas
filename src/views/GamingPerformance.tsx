@@ -1,7 +1,4 @@
-// Gaming Performance View
-// Main view for the Gaming Performance Analyzer
-
-import { useState, useEffect } from 'react';
+import { useState, useEffect, memo } from 'react';
 import {
   Gauge,
   Play,
@@ -358,7 +355,7 @@ export default function GamingPerformance() {
 }
 
 // Session History Item
-function SessionHistoryItem({
+const SessionHistoryItem = memo(function SessionHistoryItem({
   session,
   onView,
   onDelete,
@@ -404,7 +401,7 @@ function SessionHistoryItem({
       </div>
     </div>
   );
-}
+});
 
 // Bottleneck Badge
 function BottleneckBadge({ type }: { type: BottleneckType }) {

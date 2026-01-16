@@ -242,6 +242,7 @@ dependencies = [
  "discord-rich-presence",
  "lazy_static",
  "nvml-wrapper",
+ "parking_lot",
  "serde",
  "serde_json",
  "sysinfo",

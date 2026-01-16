@@ -1,33 +1,48 @@
+use parking_lot::RwLock;
 use serde::{de::DeserializeOwned, Serialize};
+use std::collections::HashMap;
 use std::fs::{self, File};
-use std::io::{Read, Write};
-use std::path::Path;
-use std::sync::Mutex;
+use std::io::{BufReader, Write};
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 lazy_static::lazy_static! {
-    static ref FILE_LOCK: Mutex<()> = Mutex::new(());
+    static ref FILE_LOCKS: RwLock<HashMap<PathBuf, Arc<RwLock<()>>>> = RwLock::new(HashMap::new());
+}
+
+fn get_file_lock(path: &Path) -> Arc<RwLock<()>> {
+    let canonical = path.to_path_buf();
+
+    {
+        let locks = FILE_LOCKS.read();
+        if let Some(lock) = locks.get(&canonical) {
+            return lock.clone();
+        }
+    }
+
+    let mut locks = FILE_LOCKS.write();
+    locks.entry(canonical).or_insert_with(|| Arc::new(RwLock::new(()))).clone()
 }
 
 pub fn read_json_file<T: DeserializeOwned>(path: &Path) -> Result<T, String> {
-    let _lock = FILE_LOCK.lock().map_err(|e| format!("Lock error: {}", e))?;
+    let lock = get_file_lock(path);
+    let _guard = lock.read();
 
     if !path.exists() {
         return Err(format!("File not found: {:?}", path));
     }
 
-    let mut file = File::open(path).map_err(|e| format!("Failed to open {:?}: {}", path, e))?;
+    let file = File::open(path).map_err(|e| format!("Failed to open {:?}: {}", path, e))?;
+    let reader = BufReader::new(file);
 
-    let mut contents = String::new();
-    file.read_to_string(&mut contents)
-        .map_err(|e| format!("Failed to read {:?}: {}", path, e))?;
-
-    serde_json::from_str(&contents)
+    serde_json::from_reader(reader)
         .map_err(|e| format!("Failed to parse JSON from {:?}: {}", path, e))
 }
 
 /// Writes JSON atomically
 pub fn write_json_file<T: Serialize>(path: &Path, data: &T) -> Result<(), String> {
-    let _lock = FILE_LOCK.lock().map_err(|e| format!("Lock error: {}", e))?;
+    let lock = get_file_lock(path);
+    let _guard = lock.write();
 
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)

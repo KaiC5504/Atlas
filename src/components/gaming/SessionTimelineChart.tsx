@@ -1,6 +1,4 @@
-// Session Timeline Chart component
-// Visualizes gaming session metrics over time
-
+import { useMemo } from 'react';
 import {
   AreaChart,
   Area,
@@ -43,17 +41,17 @@ export function SessionTimelineChart({
   const baseTime = startTime || snapshots[0]?.timestamp || 0;
 
   // Transform data for Recharts
-  const chartData = snapshots.map((snapshot) => ({
-    time: (snapshot.timestamp - baseTime) / 1000, // Seconds from start
+  const chartData = useMemo(() => snapshots.map((snapshot) => ({
+    time: (snapshot.timestamp - baseTime) / 1000, 
     cpu: snapshot.cpu_percent,
     gpu: snapshot.gpu_percent,
     ram: snapshot.ram_percent,
     vram: snapshot.vram_percent,
     timestamp: snapshot.timestamp,
-  }));
+  })), [snapshots, baseTime]);
 
-  // Generate ticks - use 30-second boundaries for longer sessions
-  const generateTicks = (): number[] | undefined => {
+  // Generate ticks
+  const timeTicks = useMemo(() => {
     if (chartData.length === 0) return undefined;
 
     const times = chartData.map(d => d.time);
@@ -61,17 +59,14 @@ export function SessionTimelineChart({
     const maxTime = Math.max(...times);
     const range = maxTime - minTime;
 
-    // For short durations (< 3 minutes), let Recharts auto-generate ticks
+    // For short durations 
     if (range < 180) {
       return undefined;
     }
 
-    // For longer durations, use 30-second boundary ticks
-    // Calculate interval to get ~6 ticks, rounded to 30-second multiples
     const idealInterval = range / 5;
     const interval = Math.max(30, Math.round(idealInterval / 30) * 30);
 
-    // Start from nearest interval boundary at or before minTime
     const startTick = Math.floor(minTime / interval) * interval;
 
     const ticks: number[] = [];
@@ -79,10 +74,8 @@ export function SessionTimelineChart({
       ticks.push(t);
     }
     return ticks;
-  };
-  const timeTicks = generateTicks();
+  }, [chartData]);
 
-  // Check if GPU data is available
   const hasGpu = showGpu && snapshots.some((s) => s.gpu_percent !== null);
 
   return (
