@@ -70,8 +70,8 @@ export function SessionTimelineChart({
     const startTick = Math.floor(minTime / interval) * interval;
 
     const ticks: number[] = [];
-    for (let t = startTick; t <= maxTime + interval * 0.5; t += interval) {
-      ticks.push(t);
+    for (let currentTime = startTick; currentTime <= maxTime + interval * 0.5; currentTime += interval) {
+      ticks.push(currentTime);
     }
     return ticks;
   }, [chartData]);

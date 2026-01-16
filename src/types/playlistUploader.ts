@@ -51,7 +51,7 @@ export interface DownloadResult {
   indexEntries: number;
   playlistTracks: number;
   playlistName?: string;
-  newTrackIds: string[];
+  downloadedTrackIds: string[];
   error?: string;
 }
 

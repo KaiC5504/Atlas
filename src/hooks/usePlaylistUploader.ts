@@ -181,7 +181,7 @@ export function usePlaylistUploader(): UsePlaylistUploaderReturn {
         total: 0,
         indexEntries: 0,
         playlistTracks: 0,
-        newTrackIds: [],
+        downloadedTrackIds: [],
         error: errorMsg,
       };
     } finally {

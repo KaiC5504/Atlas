@@ -39,8 +39,11 @@ import json
 import sys
 import os
 from pathlib import Path
-from typing import Dict, Any, List, Tuple, Optional
+from typing import Dict, Any, List, Tuple, Optional, TYPE_CHECKING
 import numpy as np
+
+if TYPE_CHECKING:
+    import onnxruntime as ort
 
 # Add parent directories for imports
 sys.path.insert(0, str(Path(__file__).parent))
@@ -237,19 +240,18 @@ class AudioEventDetector(WorkerBase):
             from pydub import AudioSegment
             import tempfile
 
-            # Create temporary file for extracted audio
-            temp_audio = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
-            temp_audio_path = temp_audio.name
-            temp_audio.close()
+            extracted_audio_file = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
+            extracted_audio_path = extracted_audio_file.name
+            extracted_audio_file.close()
 
-            write_log(f"Extracting audio to temporary file: {temp_audio_path}", "info")
+            write_log(f"Extracting audio to temporary file: {extracted_audio_path}", "info")
 
             # Load video and extract audio
             audio = AudioSegment.from_file(video_file)
-            audio.export(temp_audio_path, format='wav')
+            audio.export(extracted_audio_path, format='wav')
 
             write_log("Audio extraction complete", "info")
-            return temp_audio_path
+            return extracted_audio_path
 
         except ImportError:
             raise RuntimeError(
@@ -283,7 +285,6 @@ class AudioEventDetector(WorkerBase):
 
         write_log(f"Batch size: {batch_size} ({'GPU' if using_gpu else 'CPU'})", "info")
 
-        # OPTIMIZATION: Compute full mel spectrogram once for entire audio
         write_log("Computing full mel spectrogram (batched optimization)...", "info")
         full_mel_spec = librosa.feature.melspectrogram(
             y=audio, sr=sr, n_mels=n_mels,
@@ -315,20 +316,16 @@ class AudioEventDetector(WorkerBase):
                 if mel_window.shape[1] < frames_per_window:
                     mel_window = np.pad(mel_window, ((0, 0), (0, frames_per_window - mel_window.shape[1])))
 
-                # Normalize per-window
                 mel_window = (mel_window - mel_window.mean()) / (mel_window.std() + 1e-8)
                 batch_features.append(mel_window)
 
-            # Stack into batch tensor: (batch_size, 1, 128, frames_per_window)
             batch_input = np.array(batch_features)[:, np.newaxis, :, :].astype(np.float32)
 
             # Run batch inference
             outputs = model.run(None, {'mel_spectrogram': batch_input})
-            batch_probs = outputs[0][:, 0]  # Extract probabilities
+            batch_probs = outputs[0][:, 0]  
 
-            # Record predictions with correct time mapping
             for i, (frame_start, prob) in enumerate(zip(batch_frame_starts, batch_probs)):
-                # Convert frame index back to time in seconds
                 window_start_sec = (frame_start * hop_length) / sr
                 predictions.append((window_start_sec, float(prob)))
 
@@ -346,22 +343,6 @@ class AudioEventDetector(WorkerBase):
         predictions: List[Tuple[float, float]],
         config: ModelConfig
     ) -> List[TimestampSegment]:
-        """
-        Convert raw predictions to timestamp segments.
-
-        Steps:
-        1. Threshold predictions (confidence >= threshold)
-        2. Merge adjacent positive windows into segments
-        3. Filter out segments shorter than min_duration
-        4. Merge segments with small gaps between them
-
-        Args:
-            predictions: List of (start_seconds, probability) tuples
-            config: Model configuration
-
-        Returns:
-            List of TimestampSegment objects
-        """
         threshold = config.confidence_threshold
         min_duration = config.min_segment_duration_ms / 1000
         merge_gap = config.merge_gap_ms / 1000
@@ -373,7 +354,6 @@ class AudioEventDetector(WorkerBase):
         if not positive_windows:
             return []
 
-        # Step 2: Group consecutive windows into segments
         segments = []
         current_segment = {
             'start': positive_windows[0][0],
@@ -382,12 +362,10 @@ class AudioEventDetector(WorkerBase):
         }
 
         for start_time, prob in positive_windows[1:]:
-            # Check if this window is adjacent or overlapping with current segment
             if start_time <= current_segment['end'] + merge_gap:
                 current_segment['end'] = start_time + window_duration
                 current_segment['confidences'].append(prob)
             else:
-                # Save current segment and start new one
                 segments.append(current_segment)
                 current_segment = {
                     'start': start_time,
@@ -397,7 +375,6 @@ class AudioEventDetector(WorkerBase):
 
         segments.append(current_segment)
 
-        # Step 3: Filter by minimum duration and create TimestampSegment objects
         result = []
         for seg in segments:
             duration = seg['end'] - seg['start']

@@ -224,7 +224,7 @@ class DownloadManager:
         successful = 0
         cached = 0
         failed = 0
-        new_track_ids = []
+        downloaded_track_ids = []
 
         self._log(f"Downloading {total} videos ({parallel} parallel)...")
 
@@ -247,7 +247,7 @@ class DownloadManager:
                             cached += 1
                         else:
                             successful += 1
-                            new_track_ids.append(result['id'])
+                            downloaded_track_ids.append(result['id'])
                     else:
                         failed += 1
                 except Exception:
@@ -261,7 +261,7 @@ class DownloadManager:
             'cached': cached,
             'failed': failed,
             'total': total,
-            'new_track_ids': new_track_ids,
+            'downloaded_track_ids': downloaded_track_ids,
         }
 
     def build_index(self, videos: list) -> dict:
@@ -375,6 +375,6 @@ class DownloadManager:
             'total': download_result['total'],
             'indexEntries': total_entries,
             'playlistTracks': playlist_tracks,
-            'newTrackIds': download_result.get('new_track_ids', []),
+            'downloadedTrackIds': download_result.get('downloaded_track_ids', []),
             'playlistName': playlist_name,
         }

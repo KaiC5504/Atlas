@@ -1,6 +1,3 @@
-// UpdateToast.tsx - Toast notification for app updates
-// Shows different states: checking, downloading, ready, error
-
 import { RefreshCw, Download, RotateCcw, X, CheckCircle, AlertCircle } from 'lucide-react';
 import type { UpdateState } from '../types/updater';
 
@@ -19,12 +16,10 @@ export function UpdateToast({
   onDismiss,
   onRetry,
 }: UpdateToastProps) {
-  // Don't show toast for idle state or when no update is available
   if (state.status === 'idle') {
     return null;
   }
 
-  // Checking state - brief loading indicator
   if (state.status === 'checking') {
     return (
       <div className="fixed bottom-4 right-4 z-50 animate-slide-up">
@@ -36,7 +31,6 @@ export function UpdateToast({
     );
   }
 
-  // Update available state
   if (state.status === 'available' && state.info) {
     return (
       <div className="fixed bottom-4 right-4 z-50 animate-slide-up">
@@ -81,7 +75,6 @@ export function UpdateToast({
     );
   }
 
-  // Downloading state
   if (state.status === 'downloading' && state.progress) {
     const percent = Math.round(state.progress.percent);
     return (
@@ -113,7 +106,6 @@ export function UpdateToast({
     );
   }
 
-  // Downloaded state - ready to install
   if (state.status === 'downloaded') {
     return (
       <div className="fixed bottom-4 right-4 z-50 animate-slide-up">
@@ -153,7 +145,6 @@ export function UpdateToast({
     );
   }
 
-  // Error state
   if (state.status === 'error') {
     return (
       <div className="fixed bottom-4 right-4 z-50 animate-slide-up">
@@ -196,11 +187,11 @@ export function UpdateToast({
   return null;
 }
 
-// Helper function to format bytes
+// Helper
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B';
-  const k = 1024;
+  const BYTES_PER_UNIT = 1024;
   const sizes = ['B', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+  const unitIndex = Math.floor(Math.log(bytes) / Math.log(BYTES_PER_UNIT));
+  return parseFloat((bytes / Math.pow(BYTES_PER_UNIT, unitIndex)).toFixed(1)) + ' ' + sizes[unitIndex];
 }

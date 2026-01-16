@@ -40,10 +40,10 @@ def create_training_dataset(
     output_path = Path(output_dir)
     train_pos = output_path / 'train' / 'positive'
     train_neg = output_path / 'train' / 'negative'
-    val_pos = output_path / 'val' / 'positive'
-    val_neg = output_path / 'val' / 'negative'
+    validation_positive_dir = output_path / 'val' / 'positive'
+    validation_negative_dir = output_path / 'val' / 'negative'
 
-    for dir_path in [train_pos, train_neg, val_pos, val_neg]:
+    for dir_path in [train_pos, train_neg, validation_positive_dir, validation_negative_dir]:
         dir_path.mkdir(parents=True, exist_ok=True)
 
     # Calculate sample sizes
@@ -84,14 +84,14 @@ def create_training_dataset(
     # Process hard negatives
     print("Processing hard negative samples...")
     hard_neg_windows = process_samples(
-        manifest.hard_negatives,
+        manifest.hard_negative_samples,
         label=0,
         window_samples=window_samples,
         hop_samples=hop_samples,
         min_energy=min_energy
     )
     stats['hard_negative']['total_windows'] = len(hard_neg_windows)
-    stats['hard_negative']['files'] = len(manifest.hard_negatives)
+    stats['hard_negative']['files'] = len(manifest.hard_negative_samples)
 
     # Combine all negatives
     all_neg_windows = neg_windows + hard_neg_windows
@@ -115,8 +115,8 @@ def create_training_dataset(
     save_samples(train_negative, train_neg, 'sample')
 
     print("Saving validation samples...")
-    save_samples(val_positive, val_pos, 'sample')
-    save_samples(val_negative, val_neg, 'sample')
+    save_samples(val_positive, validation_positive_dir, 'sample')
+    save_samples(val_negative, validation_negative_dir, 'sample')
 
     # Update stats
     stats['positive']['train'] = len(train_positive)
@@ -221,7 +221,7 @@ def create_manifest_template(output_path: str) -> None:
             {"file": "/path/to/whispering_clip.mp3", "label": "other", "source": "creator_b"},
             {"file": "/path/to/tapping_clip.wav", "label": "other", "source": "creator_c"}
         ],
-        "hard_negatives": [
+        "hard_negative_samples": [
             {"file": "/path/to/creator_a_non_target.mp3", "label": "other", "source": "creator_a"}
         ]
     }
@@ -248,7 +248,7 @@ def validate_manifest(manifest_path: str) -> Tuple[bool, List[str]]:
     all_samples = (
         manifest.positive_samples +
         manifest.negative_samples +
-        manifest.hard_negatives
+        manifest.hard_negative_samples
     )
 
     for sample in all_samples:

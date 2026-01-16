@@ -1,5 +1,3 @@
-// Audio Event Detection types
-
 export type AudioDetectionStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
 
 export interface TimestampSegment {
@@ -20,8 +18,8 @@ export interface AudioDetectionJob {
   id: string;
   input_file: string;
   status: AudioDetectionStatus;
-  progress: number; // 0-100
-  stage: string | null; // e.g., "Extracting features...", "Running inference..."
+  progress: number;
+  stage: string | null;
   created_at: string;
   completed_at: string | null;
   error: string | null;
@@ -29,12 +27,12 @@ export interface AudioDetectionJob {
 }
 
 export interface ModelConfig {
-  model_path: string | null; // null = use default model
-  window_size_ms: number; // Default: 1000ms (1 second windows)
-  hop_size_ms: number; // Default: 250ms (75% overlap)
-  confidence_threshold: number; // Default: 0.7
-  min_segment_duration_ms: number; // Default: 500ms (ignore short detections)
-  merge_gap_ms: number; // Default: 300ms (merge segments closer than this)
+  model_path: string | null; 
+  window_size_ms: number; 
+  hop_size_ms: number; 
+  confidence_threshold: number; 
+  min_segment_duration_ms: number; 
+  merge_gap_ms: number; 
 }
 
 export const DEFAULT_MODEL_CONFIG: ModelConfig = {
@@ -49,7 +47,7 @@ export const DEFAULT_MODEL_CONFIG: ModelConfig = {
 // Command parameters
 export interface SubmitAudioDetectionParams {
   input_file: string;
-  config: ModelConfig | null; // null = use defaults
+  config: ModelConfig | null; 
 }
 
 export interface SubmitAudioDetectionResult {
@@ -73,17 +71,17 @@ export interface AudioDetectionFailedEvent {
   error: string;
 }
 
-// Training data manifest types (for data preparation)
+// Training data manifest types 
 export interface TrainingSample {
   file: string;
   label: 'target_audio' | 'other';
-  source: string; // creator identifier
+  source: string; 
 }
 
 export interface TrainingManifest {
   positive_samples: TrainingSample[];
   negative_samples: TrainingSample[];
-  hard_negatives: TrainingSample[];
+  hard_negative_samples: TrainingSample[];
 }
 
 // Training configuration
@@ -96,7 +94,7 @@ export interface TrainingConfig {
   augmentation: {
     time_mask_max_width: number;
     freq_mask_max_width: number;
-    gain_range: [number, number]; // dB
+    gain_range: [number, number]; 
     mixup_alpha: number;
   };
   class_weights: {

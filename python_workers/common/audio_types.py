@@ -89,10 +89,9 @@ class TrainingSample:
 
 @dataclass
 class TrainingManifest:
-    """Training data manifest"""
     positive_samples: List[TrainingSample] = field(default_factory=list)
     negative_samples: List[TrainingSample] = field(default_factory=list)
-    hard_negatives: List[TrainingSample] = field(default_factory=list)
+    hard_negative_samples: List[TrainingSample] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'TrainingManifest':
@@ -103,8 +102,8 @@ class TrainingManifest:
             negative_samples=[
                 TrainingSample(**s) for s in data.get('negative_samples', [])
             ],
-            hard_negatives=[
-                TrainingSample(**s) for s in data.get('hard_negatives', [])
+            hard_negative_samples=[
+                TrainingSample(**s) for s in data.get('hard_negative_samples', [])
             ]
         )
 
@@ -112,7 +111,7 @@ class TrainingManifest:
         return {
             "positive_samples": [s.to_dict() for s in self.positive_samples],
             "negative_samples": [s.to_dict() for s in self.negative_samples],
-            "hard_negatives": [s.to_dict() for s in self.hard_negatives]
+            "hard_negative_samples": [s.to_dict() for s in self.hard_negative_samples]
         }
 
 
@@ -160,8 +159,7 @@ class TrainingConfig:
         )
 
 
-# Feature extraction constants
-SAMPLE_RATE = 16000  # 16kHz for audio classification
-N_MELS = 128         # Number of mel frequency bins
-N_FFT = 2048         # FFT window size (~128ms at 16kHz)
-HOP_LENGTH = 512     # FFT hop length (~32ms)
+SAMPLE_RATE = 16000  
+N_MELS = 128         
+N_FFT = 2048        
+HOP_LENGTH = 512     

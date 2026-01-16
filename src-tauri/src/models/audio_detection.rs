@@ -96,5 +96,5 @@ pub struct TrainingSample {
 pub struct TrainingManifest {
     pub positive_samples: Vec<TrainingSample>,
     pub negative_samples: Vec<TrainingSample>,
-    pub hard_negatives: Vec<TrainingSample>,
+    pub hard_negative_samples: Vec<TrainingSample>,
 }

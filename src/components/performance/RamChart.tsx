@@ -1,30 +1,22 @@
-// RAM Usage Chart Component
 import { AreaChart, Area, YAxis, ResponsiveContainer } from 'recharts';
 import { MetricDataPoint, RamMetrics } from '../../types/performance';
 import { MemoryStick } from 'lucide-react';
 
 interface RamChartProps {
-  /** Historical RAM usage data for the chart */
   data: MetricDataPoint[];
-  /** Current RAM metrics */
   metrics: RamMetrics | null;
 }
 
-/**
- * RAM usage time-series chart with current value display.
- * Shows a 60-second rolling window of memory usage.
- */
 export function RamChart({ data, metrics }: RamChartProps) {
   const currentValue = metrics?.usage_percent ?? 0;
 
-  // Format bytes to human-readable
   const formatBytes = (bytes: number): string => {
-    const gb = bytes / (1024 * 1024 * 1024);
-    if (gb >= 1) {
-      return `${gb.toFixed(1)} GB`;
+    const gigabytes = bytes / (1024 * 1024 * 1024);
+    if (gigabytes >= 1) {
+      return `${gigabytes.toFixed(1)} GB`;
     }
-    const mb = bytes / (1024 * 1024);
-    return `${mb.toFixed(0)} MB`;
+    const megabytes = bytes / (1024 * 1024);
+    return `${megabytes.toFixed(0)} MB`;
   };
 
   return (

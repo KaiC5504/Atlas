@@ -65,7 +65,7 @@ pub struct DownloadResult {
     pub index_entries: u32,
     pub playlist_tracks: u32,
     pub playlist_name: Option<String>,
-    pub new_track_ids: Vec<String>,
+    pub downloaded_track_ids: Vec<String>,
     pub error: Option<String>,
 }
 

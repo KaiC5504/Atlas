@@ -303,8 +303,8 @@ pub async fn download_playlist(
                     .get("playlistName")
                     .and_then(|v| v.as_str())
                     .map(String::from),
-                new_track_ids: output
-                    .get("newTrackIds")
+                downloaded_track_ids: output
+                    .get("downloadedTrackIds")
                     .and_then(|v| v.as_array())
                     .map(|arr| {
                         arr.iter()
@@ -333,7 +333,7 @@ pub async fn download_playlist(
                 index_entries: 0,
                 playlist_tracks: 0,
                 playlist_name: None,
-                new_track_ids: Vec::new(),
+                downloaded_track_ids: Vec::new(),
                 error: Some(e),
             })
         }
