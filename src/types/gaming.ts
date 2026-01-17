@@ -93,6 +93,13 @@ export interface GamingSessionData {
   bottleneck_events: BottleneckEvent[];
 }
 
+// Active session state for frontend recovery after navigation
+export interface ActiveSessionState {
+  session: GamingSession;
+  recent_metrics: MetricsSnapshot[];
+  current_bottleneck: CurrentBottleneckStatus | null;
+}
+
 export interface CurrentBottleneckStatus {
   bottleneck_type: BottleneckType;
   severity: number;

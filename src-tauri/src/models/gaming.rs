@@ -191,6 +191,14 @@ impl Default for MetricStats {
     }
 }
 
+/// Active session state for frontend recovery after navigation
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ActiveSessionState {
+    pub session: GamingSession,
+    pub recent_metrics: Vec<MetricsSnapshot>,
+    pub current_bottleneck: Option<CurrentBottleneckStatus>,
+}
+
 /// Default game whitelist with common games
 impl GameWhitelist {
     pub fn default_whitelist() -> Self {

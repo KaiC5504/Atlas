@@ -20,10 +20,11 @@ use commands::{
     downloads::{add_download, cancel_download, delete_download, list_downloads, start_download, validate_download_path},
     gaming::{
         add_game_to_whitelist, delete_gaming_session, end_gaming_session,
-        get_active_gaming_session, get_bottleneck_thresholds, get_game_whitelist,
-        get_gaming_sessions, get_session_details, is_gaming_detection_running,
-        remove_game_from_whitelist, start_gaming_detection, stop_gaming_detection,
-        toggle_game_enabled, update_bottleneck_thresholds, update_game_whitelist,
+        get_active_gaming_session, get_active_session_state, get_bottleneck_thresholds,
+        get_game_whitelist, get_gaming_sessions, get_session_details,
+        is_gaming_detection_running, remove_game_from_whitelist, start_gaming_detection,
+        stop_gaming_detection, toggle_game_enabled, update_bottleneck_thresholds,
+        update_game_whitelist,
     },
     launcher::{
         add_detected_games, add_manual_game, clear_game_scan_cache, get_game_library, get_icon_base64,
@@ -117,6 +118,14 @@ pub fn run() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             Some(vec!["--autostart"]),
         ))
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            // Another instance tried to launch - show and focus the existing window
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.unminimize();
+                let _ = window.set_focus();
+            }
+        }))
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
                 if window.label() == "main" {
@@ -298,6 +307,7 @@ pub fn run() {
             stop_gaming_detection,
             is_gaming_detection_running,
             get_active_gaming_session,
+            get_active_session_state,
             get_gaming_sessions,
             get_session_details,
             delete_gaming_session,

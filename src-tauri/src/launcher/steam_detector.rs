@@ -274,6 +274,7 @@ pub fn detect_steam_games() -> Vec<DetectedGame> {
                             source: GameSource::Steam,
                             app_id: acf_data.app_id,
                             icon_path,
+                            launch_args: None,
                         });
                     }
                 }

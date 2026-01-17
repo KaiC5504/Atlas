@@ -2,7 +2,7 @@
 
 use crate::file_manager::{read_json_file, write_json_file};
 use crate::launcher::{
-    detect_hoyoplay_games, detect_steam_games,
+    detect_hoyoplay_games, detect_steam_games, detect_riot_games,
     playtime_tracker::{start_game_session, PlaytimeTrackerState},
 };
 use crate::models::{AddGameRequest, DetectedGame, GameEntry, GameLibrary, GameSource, GameWhitelist, LibraryGame, GameScanCache};
@@ -68,6 +68,8 @@ pub fn scan_for_games(force_rescan: Option<bool>) -> Result<Vec<DetectedGame>, S
     all_games.extend(steam_games);
     let hoyoplay_games = detect_hoyoplay_games();
     all_games.extend(hoyoplay_games);
+    let riot_games = detect_riot_games();  // NEW: Detect Riot Games (Valorant, LoL, etc.)
+    all_games.extend(riot_games);
 
     // Save to cache
     let cache = GameScanCache::new(all_games.clone());
@@ -101,16 +103,18 @@ pub fn add_detected_games(games: Vec<DetectedGame>) -> Result<GameLibrary, Strin
     let mut whitelist: GameWhitelist = read_json_file(&get_game_whitelist_json_path()).unwrap_or_default();
 
     for game in games {
-        // Skip if already in library
-        if library.has_game_with_path(&game.executable_path) {
+        // Skip if already in library (check by app_id for Riot games, executable_path for others)
+        if game.app_id.is_some() {
+            if library.games.iter().any(|g| g.app_id == game.app_id) {
+                continue;
+            }
+        } else if library.has_game_with_path(&game.executable_path) {
             continue;
         }
 
-        // Extract process name from executable path
-        let process_name = Path::new(&game.executable_path)
-            .file_name()
-            .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_else(|| "unknown.exe".to_string());
+        // For Riot games, get the actual game process name from the app_id
+        // For others, extract from executable path
+        let process_name = get_process_name_for_game(&game);
 
         let library_game = LibraryGame {
             id: uuid::Uuid::new_v4().to_string(),
@@ -124,6 +128,7 @@ pub fn add_detected_games(games: Vec<DetectedGame>) -> Result<GameLibrary, Strin
             added_at: chrono::Utc::now().to_rfc3339(),
             last_played: None,
             total_playtime_seconds: 0,
+            launch_args: game.launch_args,
         };
 
         library.add_game(library_game);
@@ -146,6 +151,30 @@ pub fn add_detected_games(games: Vec<DetectedGame>) -> Result<GameLibrary, Strin
         .map_err(|e| format!("Failed to save whitelist: {}", e))?;
 
     Ok(library)
+}
+
+/// Get the process name to monitor for a game
+fn get_process_name_for_game(game: &DetectedGame) -> String {
+    // For Riot games, use the actual game process name (not Riot Client)
+    if game.source == GameSource::Riot {
+        if let Some(app_id) = &game.app_id {
+            return match app_id.as_str() {
+                "riot_valorant" => "VALORANT-Win64-Shipping.exe".to_string(),
+                "riot_league_of_legends" => "League of Legends.exe".to_string(),
+                "riot_bacon" => "Legends of Runeterra.exe".to_string(),
+                _ => Path::new(&game.executable_path)
+                    .file_name()
+                    .map(|n| n.to_string_lossy().to_string())
+                    .unwrap_or_else(|| "unknown.exe".to_string()),
+            };
+        }
+    }
+
+    // Default: extract from executable path
+    Path::new(&game.executable_path)
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| "unknown.exe".to_string())
 }
 
 /// Add a manual game to library
@@ -183,6 +212,7 @@ pub fn add_manual_game(request: AddGameRequest) -> Result<GameLibrary, String> {
         added_at: chrono::Utc::now().to_rfc3339(),
         last_played: None,
         total_playtime_seconds: 0,
+        launch_args: None,
     };
 
     library.add_game(library_game);
@@ -237,6 +267,7 @@ pub fn launch_game(
         .ok_or_else(|| "Game not found".to_string())?;
 
     let exe_path = game.executable_path.clone();
+    let launch_args = game.launch_args.clone();
     let process_name = game.process_name.clone();
     let game_id_clone = game_id.clone();
 
@@ -246,7 +277,7 @@ pub fn launch_game(
     }
     let _ = write_json_file(&get_game_library_json_path(), &library);
 
-    launch_process_silent(&exe_path)?;
+    launch_process_silent(&exe_path, launch_args.as_deref())?;
 
     start_game_session(
         app_handle.clone(),
@@ -261,7 +292,7 @@ pub fn launch_game(
 }
 
 #[cfg(windows)]
-fn launch_process_silent(exe_path: &str) -> Result<(), String> {
+fn launch_process_silent(exe_path: &str, args: Option<&str>) -> Result<(), String> {
     use std::ffi::OsStr;
     use std::os::windows::ffi::OsStrExt;
     use std::ptr::null_mut;
@@ -275,14 +306,18 @@ fn launch_process_silent(exe_path: &str) -> Result<(), String> {
     let operation = to_wide("open");
     let file = to_wide(exe_path);
 
+    // Convert args to wide string if present
+    let args_wide = args.map(|a| to_wide(a));
+    let args_ptr = args_wide.as_ref().map(|a| a.as_ptr()).unwrap_or(null_mut());
+
     let result = unsafe {
         ShellExecuteW(
-            null_mut(),           
-            operation.as_ptr(),   
-            file.as_ptr(),       
-            null_mut(),           
-            null_mut(),           
-            SW_SHOWNORMAL as i32, 
+            null_mut(),           // hwnd
+            operation.as_ptr(),   // lpOperation ("open")
+            file.as_ptr(),        // lpFile (executable path)
+            args_ptr,             // lpParameters (command line arguments)
+            null_mut(),           // lpDirectory (working directory)
+            SW_SHOWNORMAL as i32, // nShowCmd
         )
     };
 
@@ -310,9 +345,12 @@ fn launch_process_silent(exe_path: &str) -> Result<(), String> {
 }
 
 #[cfg(not(windows))]
-fn launch_process_silent(exe_path: &str) -> Result<(), String> {
-    std::process::Command::new(exe_path)
-        .spawn()
+fn launch_process_silent(exe_path: &str, args: Option<&str>) -> Result<(), String> {
+    let mut cmd = std::process::Command::new(exe_path);
+    if let Some(args_str) = args {
+        cmd.args(args_str.split_whitespace());
+    }
+    cmd.spawn()
         .map_err(|e| format!("Failed to launch game: {}", e))?;
 
     Ok(())

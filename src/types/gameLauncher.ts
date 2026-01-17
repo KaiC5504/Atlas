@@ -1,6 +1,6 @@
 // Game Launcher types
 
-export type GameSource = 'steam' | 'hoyo_play' | 'manual';
+export type GameSource = 'steam' | 'hoyo_play' | 'riot' | 'manual';
 
 export interface DetectedGame {
   name: string;
@@ -9,6 +9,7 @@ export interface DetectedGame {
   source: GameSource;
   app_id: string | null;
   icon_path: string | null;
+  launch_args: string | null;  // Arguments to pass when launching (e.g., for Riot Client)
 }
 
 export interface LibraryGame {
@@ -23,6 +24,7 @@ export interface LibraryGame {
   added_at: string;
   last_played: string | null;
   total_playtime_seconds: number;
+  launch_args: string | null;  // Arguments to pass when launching (e.g., for Riot Client)
 }
 
 export interface GameLibrary {
@@ -55,6 +57,8 @@ export function getSourceDisplayName(source: GameSource): string {
       return 'Steam';
     case 'hoyo_play':
       return 'HoYoPlay';
+    case 'riot':
+      return 'Riot';
     case 'manual':
       return 'Manual';
     default:

@@ -21,6 +21,15 @@ __pycache__/
 venv/
 ENV/
 
+# Python workers build artifacts (PyInstaller)
+python_workers/.venv-build/
+python_workers/build/
+python_workers/dist/
+python_workers/*.spec
+
+releases/
+scripts/
+
 # IDE
 .vscode/
 .idea/
@@ -57,3 +66,14 @@ coverage/
 
 # Internal development notes
 memory-bank/
+
+# Auto Claude data directory
+.auto-claude/
+
+# Auto Claude generated files
+.auto-claude-security.json
+.auto-claude-status
+.claude_settings.json
+.worktrees/
+.security-key
+logs/security/

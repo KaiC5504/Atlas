@@ -167,6 +167,8 @@ mod tests {
         MetricsSnapshot {
             timestamp: chrono::Utc::now().timestamp_millis(),
             cpu_percent: cpu,
+            top_core_1: None,
+            top_core_2: None,
             gpu_percent: gpu,
             ram_percent: ram,
             vram_percent: None,

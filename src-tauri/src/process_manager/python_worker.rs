@@ -1,6 +1,3 @@
-// Python worker process management
-// Handles spawning and monitoring Python worker processes
-
 use serde::{Deserialize, Serialize};
 use std::process::Stdio;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
@@ -30,6 +27,15 @@ pub enum WorkerMessage {
         level: String,
         message: String,
     },
+}
+
+/// Represents how a worker should be executed
+#[derive(Debug)]
+pub enum WorkerExecutable {
+    /// Compiled .exe file (production) - direct execution
+    Exe(std::path::PathBuf),
+    /// Python script (development) - requires Python interpreter
+    Script { python_path: String, script_path: std::path::PathBuf },
 }
 
 pub fn get_python_path() -> String {
@@ -85,26 +91,96 @@ pub fn get_workers_dir() -> std::path::PathBuf {
     cwd_workers
 }
 
+/// ML workers that require special dependencies (torch, demucs, etc.)
+/// These are not bundled by default to keep installer size small
+const ML_WORKERS: &[&str] = &[
+    "audio_separator",
+    "audio_event_detector",
+];
+
+/// Check if a worker is an ML worker that requires special dependencies
+fn is_ml_worker(script: &str) -> bool {
+    let base_name = script.trim_end_matches(".py");
+    ML_WORKERS.iter().any(|&ml| base_name == ml)
+}
+
+/// Find the worker executable - checks for compiled .exe first, then falls back to .py script
+/// Returns the appropriate WorkerExecutable variant for the given script name
+pub fn find_worker_executable(script: &str) -> Result<WorkerExecutable, String> {
+    let workers_dir = get_workers_dir();
+
+    // Get the base name without extension (e.g., "yt_dlp_worker" from "yt_dlp_worker.py")
+    let base_name = script.trim_end_matches(".py");
+
+    // First, check for compiled .exe in dist directory (production builds)
+    let exe_path = workers_dir.join("dist").join(format!("{}.exe", base_name));
+    if exe_path.exists() {
+        println!("Found compiled worker: {:?}", exe_path);
+        return Ok(WorkerExecutable::Exe(exe_path));
+    }
+
+    // Also check directly in workers_dir (alternative layout)
+    let exe_path_direct = workers_dir.join(format!("{}.exe", base_name));
+    if exe_path_direct.exists() {
+        println!("Found compiled worker: {:?}", exe_path_direct);
+        return Ok(WorkerExecutable::Exe(exe_path_direct));
+    }
+
+    // Fall back to Python script (development mode)
+    let script_path = workers_dir.join(script);
+    if script_path.exists() {
+        let python_path = get_python_path();
+        println!("Using Python script (dev mode): {:?} with {}", script_path, python_path);
+        return Ok(WorkerExecutable::Script {
+            python_path,
+            script_path
+        });
+    }
+
+    // Provide user-friendly error for ML workers
+    if is_ml_worker(script) {
+        return Err(format!(
+            "This feature requires machine learning components that are not installed. \
+            ML features (audio separation, audio detection) require additional setup. \
+            Please contact the developer if you need this feature."
+        ));
+    }
+
+    Err(format!(
+        "Worker not found: {} (checked {:?} and {:?})",
+        script,
+        exe_path,
+        workers_dir.join(script)
+    ))
+}
+
 /// Spawn a Python worker asynchronously with optional progress callback
+/// Automatically uses compiled .exe if available, otherwise falls back to Python script
 pub async fn spawn_python_worker_async(
     script: &str,
     input: serde_json::Value,
     progress_callback: Option<mpsc::Sender<WorkerMessage>>,
 ) -> Result<serde_json::Value, String> {
-    let python_path = get_python_path();
-    let workers_dir = get_workers_dir();
-    let script_path = workers_dir.join(script);
+    // Find the worker executable (compiled .exe or Python script)
+    let worker_exec = find_worker_executable(script)?;
 
-    if !script_path.exists() {
-        return Err(format!("Worker script not found: {:?}", script_path));
-    }
+    println!("Spawning worker: {:?}", worker_exec);
 
-    println!("Spawning Python worker: {:?}", script_path);
+    // Build command based on executable type
+    let mut cmd = match &worker_exec {
+        WorkerExecutable::Exe(exe_path) => {
+            // Direct execution of compiled .exe
+            Command::new(exe_path)
+        }
+        WorkerExecutable::Script { python_path, script_path } => {
+            // Python interpreter execution
+            let mut c = Command::new(python_path);
+            c.arg(script_path);
+            c
+        }
+    };
 
-    // Spawn the Python process
-    let mut cmd = Command::new(&python_path);
-    cmd.arg(&script_path)
-        .stdin(Stdio::piped())
+    cmd.stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);

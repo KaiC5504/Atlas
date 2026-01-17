@@ -8,7 +8,10 @@ use crate::gaming::{
     GameDetectionState, GamingSessionManager,
 };
 use crate::performance::MonitoringState;
-use crate::models::gaming::*;
+use crate::models::gaming::{
+    ActiveSessionState, BottleneckThresholds, GameEntry, GameWhitelist,
+    GamingSession, GamingSessionData,
+};
 use crate::utils::{
     get_bottleneck_thresholds_json_path, get_game_whitelist_json_path,
     get_gaming_sessions_json_path, get_session_data_path,
@@ -118,6 +121,14 @@ pub fn get_active_gaming_session(
     session_manager: State<'_, Arc<GamingSessionManager>>,
 ) -> Result<Option<GamingSession>, String> {
     Ok(session_manager.get_active_session())
+}
+
+/// Get the active session state including recent metrics (for frontend recovery after navigation)
+#[tauri::command]
+pub fn get_active_session_state(
+    session_manager: State<'_, Arc<GamingSessionManager>>,
+) -> Result<Option<ActiveSessionState>, String> {
+    Ok(session_manager.get_active_session_state())
 }
 
 /// Get all gaming sessions (list view)

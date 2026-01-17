@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 pub enum GameSource {
     Steam,
     HoyoPlay,
+    Riot,    // NEW: For Valorant, League of Legends, etc.
     Manual,
 }
 
@@ -24,24 +25,28 @@ pub struct DetectedGame {
     pub executable_path: String,
     pub install_path: String,
     pub source: GameSource,
-    pub app_id: Option<String>,  
+    pub app_id: Option<String>,
     pub icon_path: Option<String>,
+    #[serde(default)]
+    pub launch_args: Option<String>,  // Arguments to pass when launching (e.g., for Riot Client)
 }
 
 /// Game in the user's library
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LibraryGame {
-    pub id: String,              
+    pub id: String,
     pub name: String,
     pub executable_path: String,
     pub install_path: String,
     pub source: GameSource,
     pub app_id: Option<String>,
     pub icon_path: Option<String>,
-    pub process_name: String,    
-    pub added_at: String,        
-    pub last_played: Option<String>,  
-    pub total_playtime_seconds: u64,  
+    pub process_name: String,
+    pub added_at: String,
+    pub last_played: Option<String>,
+    pub total_playtime_seconds: u64,
+    #[serde(default)]
+    pub launch_args: Option<String>,  // Arguments to pass when launching (e.g., for Riot Client)
 }
 
 /// The complete game library

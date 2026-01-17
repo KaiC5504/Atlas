@@ -12,7 +12,7 @@ import {
 import { useGameLauncher } from '../hooks/useGameLauncher';
 import { GameCard, GameDetailPanel, AddGameModal } from '../components/launcher';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
-import { DetectedGame, LibraryGame } from '../types';
+import { DetectedGame, LibraryGame, getSourceDisplayName } from '../types';
 
 export default function GameLauncher() {
   const {
@@ -271,7 +271,7 @@ export default function GameLauncher() {
                         <p className="text-xs text-muted truncate">{game.install_path}</p>
                       </div>
                       <span className="px-2 py-1 rounded bg-white/10 text-xs text-muted">
-                        {game.source === 'steam' ? 'Steam' : 'HoYoPlay'}
+                        {getSourceDisplayName(game.source)}
                       </span>
                     </div>
                   ))}

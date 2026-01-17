@@ -6,7 +6,11 @@ use tauri::{AppHandle, Emitter};
 
 use crate::discord::DiscordPresenceManager;
 use crate::file_manager::{read_json_file, write_json_file};
-use crate::models::gaming::*;
+use crate::models::gaming::{
+    ActiveSessionState, BottleneckEvent, BottleneckType, CurrentBottleneckStatus,
+    GamingSession, GamingSessionData, MetricStats, MetricsSnapshot, SessionStatus,
+    SessionSummary, TopCoreInfo, BottleneckBreakdown,
+};
 use crate::performance::SharedMetrics;
 use crate::utils::{get_gaming_sessions_json_path, get_session_data_path};
 use super::bottleneck::BottleneckAnalyzer;
@@ -193,6 +197,34 @@ impl GamingSessionManager {
     pub fn get_active_session(&self) -> Option<GamingSession> {
         let guard = self.active_session.lock().ok()?;
         guard.as_ref().map(|data| data.session.clone())
+    }
+
+    /// Get the active session state including recent metrics (for frontend recovery)
+    pub fn get_active_session_state(&self) -> Option<ActiveSessionState> {
+        let guard = self.active_session.lock().ok()?;
+        guard.as_ref().map(|data| {
+            // Get metrics from last 5 minutes
+            let five_minutes_ago = chrono::Utc::now().timestamp_millis() - (5 * 60 * 1000);
+            let recent_metrics: Vec<MetricsSnapshot> = data.snapshots
+                .iter()
+                .filter(|s| s.timestamp > five_minutes_ago)
+                .cloned()
+                .collect();
+
+            // Get current bottleneck status from the latest snapshot
+            let current_bottleneck = if let Some(last_snapshot) = data.snapshots.last() {
+                let status = self.bottleneck_analyzer.analyze(last_snapshot);
+                Some(status)
+            } else {
+                None
+            };
+
+            ActiveSessionState {
+                session: data.session.clone(),
+                recent_metrics,
+                current_bottleneck,
+            }
+        })
     }
 
     fn end_session_internal(

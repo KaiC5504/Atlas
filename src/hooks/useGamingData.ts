@@ -13,6 +13,7 @@ import {
   GamingSessionEndedEvent,
   GamingBottleneckEvent,
   GamingMetricsEvent,
+  ActiveSessionState,
 } from '../types';
 
 interface UseGamingDataReturn {
@@ -147,8 +148,17 @@ export function useGamingData(): UseGamingDataReturn {
 
   const checkActiveSession = useCallback(async () => {
     try {
-      const session = await invoke<GamingSession | null>('get_active_gaming_session');
-      setActiveSession(session);
+      // Fetch full session state including recent metrics (for recovery after navigation)
+      const state = await invoke<ActiveSessionState | null>('get_active_session_state');
+      if (state) {
+        setActiveSession(state.session);
+        setRealtimeMetrics(state.recent_metrics);
+        setCurrentBottleneck(state.current_bottleneck);
+      } else {
+        setActiveSession(null);
+        setRealtimeMetrics([]);
+        setCurrentBottleneck(null);
+      }
     } catch (e) {
       console.error('Failed to check active session:', e);
     }

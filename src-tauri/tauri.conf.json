@@ -1,61 +1,63 @@
 {
-  "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Atlas",
-  "version": "1.4.2",
-  "identifier": "com.kai-chuan.atlas",
-  "build": {
-    "beforeDevCommand": "npm run dev",
-    "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "npm run build",
-    "frontendDist": "../dist"
-  },
-  "app": {
-    "windows": [
-      {
-        "title": "Atlas",
-        "width": 1300,
-        "height": 800,
-        "theme": "Dark",
-        "center": true
-      }
-    ],
-    "security": {
-      "csp": null,
-      "assetProtocol": {
-        "enable": true,
-        "scope": ["$LOCALAPPDATA/Atlas/icons/*"]
-      }
-    }
-  },
-  "bundle": {
-    "active": true,
-    "targets": "all",
-    "icon": [
-      "icons/32x32.png",
-      "icons/128x128.png",
-      "icons/128x128@2x.png",
-      "icons/icon.icns",
-      "icons/icon.ico"
-    ],
-    "resources": {
-      "../python_workers": "python_workers"
-    },
-    "createUpdaterArtifacts": true,
-    "windows": {
-      "nsis": {
-        "installMode": "currentUser"
-      }
-    }
-  },
-  "plugins": {
-    "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEJDN0MwRTE5NDRBNzEyNkQKUldSdEVxZEVHUTU4dlBYalZVYnR1a1o0ejFWdGdvMUd4cHJrbnB4MlBGVWZuODhtRm9XRlFNNXQK",
-      "endpoints": [
-        "https://updates.kaic5504.com/atlas/update.json"
-      ],
-      "windows": {
-        "installMode": "passive"
-      }
-    }
-  }
+    "$schema":  "https://schema.tauri.app/config/2",
+    "productName":  "Atlas",
+    "version":  "1.5.1",
+    "identifier":  "com.kai-chuan.atlas",
+    "build":  {
+                  "beforeDevCommand":  "npm run dev",
+                  "devUrl":  "http://localhost:1420",
+                  "beforeBuildCommand":  "npm run build",
+                  "frontendDist":  "../dist"
+              },
+    "app":  {
+                "windows":  [
+                                {
+                                    "title":  "Atlas",
+                                    "width":  1300,
+                                    "height":  800,
+                                    "theme":  "Dark",
+                                    "center":  true
+                                }
+                            ],
+                "security":  {
+                                 "csp":  null,
+                                 "assetProtocol":  {
+                                                       "enable":  true,
+                                                       "scope":  [
+                                                                     "$LOCALAPPDATA/Atlas/icons/*"
+                                                                 ]
+                                                   }
+                             }
+            },
+    "bundle":  {
+                   "active":  true,
+                   "targets":  "all",
+                   "icon":  [
+                                "icons/32x32.png",
+                                "icons/128x128.png",
+                                "icons/128x128@2x.png",
+                                "icons/icon.icns",
+                                "icons/icon.ico"
+                            ],
+                   "resources":  {
+                                     "../python_workers/dist":  "python_workers/dist"
+                                 },
+                   "createUpdaterArtifacts":  true,
+                   "windows":  {
+                                   "nsis":  {
+                                                "installMode":  "currentUser"
+                                            }
+                               }
+               },
+    "plugins":  {
+                    "updater":  {
+                                    "pubkey":  "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEJDN0MwRTE5NDRBNzEyNkQKUldSdEVxZEVHUTU4dlBYalZVYnR1a1o0ejFWdGdvMUd4cHJrbnB4MlBGVWZuODhtRm9XRlFNNXQK",
+                                    "endpoints":  [
+                                                      "https://updates.kaic5504.com/atlas/update.json"
+                                                  ],
+                                    "windows":  {
+                                                    "installMode":  "passive"
+                                                }
+                                }
+                }
 }

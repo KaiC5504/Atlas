@@ -54,7 +54,7 @@ Write-Host "  - Updated package.json" -ForegroundColor Green
 Write-Host ""
 
 # 2. Install dependencies if needed
-Write-Host "[2/6] Checking dependencies..." -ForegroundColor Cyan
+Write-Host "[2/7] Checking dependencies..." -ForegroundColor Cyan
 if (-not (Test-Path "node_modules")) {
     Write-Host "  Installing npm dependencies..."
     npm install
@@ -62,8 +62,25 @@ if (-not (Test-Path "node_modules")) {
 Write-Host "  Dependencies OK" -ForegroundColor Green
 Write-Host ""
 
-# 3. Build the release
-Write-Host "[3/6] Building Tauri application..." -ForegroundColor Cyan
+# 3. Build Python workers as executables
+Write-Host "[3/7] Building Python workers..." -ForegroundColor Cyan
+Write-Host "  Compiling Python workers into standalone executables..." -ForegroundColor Yellow
+
+try {
+    & ".\scripts\build-python-workers.ps1"
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "ERROR: Python worker build failed!" -ForegroundColor Red
+        exit 1
+    }
+    Write-Host "  Python workers compiled!" -ForegroundColor Green
+} catch {
+    Write-Host "ERROR: Failed to build Python workers: $($_.Exception.Message)" -ForegroundColor Red
+    exit 1
+}
+Write-Host ""
+
+# 4. Build the release
+Write-Host "[4/7] Building Tauri application..." -ForegroundColor Cyan
 Write-Host "  This may take a few minutes..." -ForegroundColor Yellow
 npm run tauri build
 
@@ -74,8 +91,8 @@ if ($LASTEXITCODE -ne 0) {
 Write-Host "  Build completed!" -ForegroundColor Green
 Write-Host ""
 
-# 4. Locate build artifacts
-Write-Host "[4/6] Locating build artifacts..." -ForegroundColor Cyan
+# 5. Locate build artifacts
+Write-Host "[5/7] Locating build artifacts..." -ForegroundColor Cyan
 $bundleDir = "src-tauri\target\release\bundle\nsis"
 
 if (-not (Test-Path $bundleDir)) {
@@ -83,39 +100,33 @@ if (-not (Test-Path $bundleDir)) {
     exit 1
 }
 
-$nsisZip = Get-ChildItem "$bundleDir\*.nsis.zip" | Select-Object -First 1
-$sigFile = Get-ChildItem "$bundleDir\*.nsis.zip.sig" | Select-Object -First 1
-$installer = Get-ChildItem "$bundleDir\*.exe" | Where-Object { $_.Name -notlike "*uninstall*" } | Select-Object -First 1
+# Tauri 2.x uses .exe installer directly for updates (not .nsis.zip like Tauri 1.x)
+$installer = Get-ChildItem "$bundleDir\*-setup.exe" | Where-Object { $_.Name -notlike "*uninstall*" } | Select-Object -First 1
+$sigFile = Get-ChildItem "$bundleDir\*-setup.exe.sig" | Select-Object -First 1
 
-if (-not $nsisZip -or -not $sigFile) {
-    Write-Host "ERROR: Update artifacts (.nsis.zip and .sig) not found." -ForegroundColor Red
+if (-not $installer -or -not $sigFile) {
+    Write-Host "ERROR: Update artifacts (.exe and .exe.sig) not found." -ForegroundColor Red
     Write-Host "  Make sure TAURI_SIGNING_PRIVATE_KEY is set and createUpdaterArtifacts is true in tauri.conf.json" -ForegroundColor Yellow
     exit 1
 }
 
-Write-Host "  Found: $($nsisZip.Name)" -ForegroundColor Green
+Write-Host "  Found: $($installer.Name)" -ForegroundColor Green
 Write-Host "  Found: $($sigFile.Name)" -ForegroundColor Green
-if ($installer) {
-    Write-Host "  Found: $($installer.Name)" -ForegroundColor Green
-}
 Write-Host ""
 
-# 5. Create release directory and copy artifacts
-Write-Host "[5/6] Creating release package..." -ForegroundColor Cyan
+# 6. Create release directory and copy artifacts
+Write-Host "[6/7] Creating release package..." -ForegroundColor Cyan
 $releaseDir = "releases\$Version"
 New-Item -ItemType Directory -Path $releaseDir -Force | Out-Null
 
-Copy-Item $nsisZip.FullName "$releaseDir\"
+Copy-Item $installer.FullName "$releaseDir\"
 Copy-Item $sigFile.FullName "$releaseDir\"
-if ($installer) {
-    Copy-Item $installer.FullName "$releaseDir\"
-}
 
 Write-Host "  Copied artifacts to $releaseDir" -ForegroundColor Green
 Write-Host ""
 
-# 6. Generate update.json manifest
-Write-Host "[6/6] Generating update manifest..." -ForegroundColor Cyan
+# 7. Generate update.json manifest
+Write-Host "[7/7] Generating update manifest..." -ForegroundColor Cyan
 $signature = Get-Content $sigFile.FullName -Raw
 $signature = $signature.Trim()
 
@@ -126,7 +137,7 @@ $updateJson = @{
     platforms = @{
         "windows-x86_64" = @{
             signature = $signature
-            url = "https://YOUR_DOMAIN/atlas/$($nsisZip.Name)"
+            url = "https://updates.kaic5504.com/atlas/$($installer.Name)"
         }
     }
 } | ConvertTo-Json -Depth 5
