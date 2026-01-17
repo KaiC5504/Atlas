@@ -26,7 +26,7 @@ use commands::{
         toggle_game_enabled, update_bottleneck_thresholds, update_game_whitelist,
     },
     launcher::{
-        add_detected_games, add_manual_game, get_game_library, get_icon_base64,
+        add_detected_games, add_manual_game, clear_game_scan_cache, get_game_library, get_icon_base64,
         launch_game, remove_game_from_library, scan_for_games,
     },
     ml_jobs::{cancel_ml_job, delete_ml_job, get_available_models, list_ml_jobs, start_ml_job, submit_ml_job},
@@ -312,6 +312,7 @@ pub fn run() {
             // Game launcher commands
             get_game_library,
             scan_for_games,
+            clear_game_scan_cache,
             add_detected_games,
             add_manual_game,
             remove_game_from_library,

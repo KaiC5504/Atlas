@@ -1,4 +1,3 @@
-// DownloadQueue view - add downloads, view download list with real-time progress
 import { useState, useEffect, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { useTauriEvent } from '../hooks';
@@ -16,8 +15,17 @@ import {
   Link,
   FolderOpen,
 } from 'lucide-react';
+import { CustomSelect } from '../components/ui/CustomSelect';
 
-// Progress bar component with glass styling
+const QUALITY_OPTIONS = [
+  { value: 'best', label: 'Best Quality' },
+  { value: '1080p', label: '1080p' },
+  { value: '720p', label: '720p' },
+  { value: '480p', label: '480p' },
+  { value: 'audio_only', label: 'Audio Only' },
+];
+
+// Progress bar component
 function ProgressBar({
   percent,
   speed,
@@ -48,7 +56,7 @@ function ProgressBar({
   );
 }
 
-// Status badge component with glass styling
+// Status badge component
 function StatusBadge({ status }: { status: string }) {
   const getStatusClass = () => {
     switch (status) {
@@ -277,18 +285,12 @@ export function DownloadQueue() {
               <label className="block text-sm font-medium text-text-secondary mb-2">
                 Quality
               </label>
-              <select
+              <CustomSelect
                 value={quality}
-                onChange={(e) => setQuality(e.target.value)}
+                onChange={setQuality}
                 disabled={submitting}
-                className="select"
-              >
-                <option value="best">Best Quality</option>
-                <option value="1080p">1080p</option>
-                <option value="720p">720p</option>
-                <option value="480p">480p</option>
-                <option value="audio_only">Audio Only</option>
-              </select>
+                options={QUALITY_OPTIONS}
+              />
             </div>
             <button
               type="submit"

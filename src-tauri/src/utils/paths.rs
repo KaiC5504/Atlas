@@ -106,6 +106,10 @@ pub fn get_game_library_json_path() -> PathBuf {
     get_data_dir().join("game_library.json")
 }
 
+pub fn get_game_scan_cache_json_path() -> PathBuf {
+    get_data_dir().join("game_scan_cache.json")
+}
+
 pub fn get_music_dir() -> PathBuf {
     get_app_data_dir().join("music")
 }

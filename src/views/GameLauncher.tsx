@@ -1,6 +1,3 @@
-// Game Launcher View
-// Main view for the Game Launcher module
-
 import { useState } from 'react';
 import {
   Library,
@@ -14,6 +11,7 @@ import {
 } from 'lucide-react';
 import { useGameLauncher } from '../hooks/useGameLauncher';
 import { GameCard, GameDetailPanel, AddGameModal } from '../components/launcher';
+import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { DetectedGame, LibraryGame } from '../types';
 
 export default function GameLauncher() {
@@ -36,6 +34,9 @@ export default function GameLauncher() {
   const [selectedGame, setSelectedGame] = useState<LibraryGame | null>(null);
   const [detectedGames, setDetectedGames] = useState<DetectedGame[]>([]);
   const [selectedDetected, setSelectedDetected] = useState<Set<number>>(new Set());
+
+  // Delete confirmation state
+  const [gameToDelete, setGameToDelete] = useState<string | null>(null);
 
   // Handle scan for games
   const handleScan = async () => {
@@ -68,10 +69,16 @@ export default function GameLauncher() {
   };
 
   // Handle remove game
-  const handleRemoveGame = async (gameId: string) => {
-    if (confirm('Remove this game from your library?')) {
-      await removeGame(gameId);
+  const handleRemoveGame = (gameId: string) => {
+    setGameToDelete(gameId);
+  };
+
+  // Confirm removal
+  const confirmRemoveGame = async () => {
+    if (gameToDelete) {
+      await removeGame(gameToDelete);
       setSelectedGame(null);
+      setGameToDelete(null);
     }
   };
 
@@ -307,6 +314,18 @@ export default function GameLauncher() {
           </div>
         </div>
       )}
+
+      {/* Remove Game Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={gameToDelete !== null}
+        title="Remove Game"
+        message="Are you sure you want to remove this game from your library? The game files will not be deleted."
+        confirmLabel="Remove"
+        cancelLabel="Cancel"
+        variant="danger"
+        onConfirm={confirmRemoveGame}
+        onCancel={() => setGameToDelete(null)}
+      />
     </div>
   );
 }

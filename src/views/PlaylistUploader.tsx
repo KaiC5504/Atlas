@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Music2, FolderOpen, AlertCircle, Loader2 } from 'lucide-react';
-import { invoke } from '@tauri-apps/api/core';
+import { Music2, AlertCircle, Loader2 } from 'lucide-react';
 import { usePlaylistUploader } from '../hooks/usePlaylistUploader';
 import {
   SyncStatusCard,
@@ -32,18 +31,9 @@ export default function PlaylistUploader() {
   const [selectedTracks, setSelectedTracks] = useState<string[]>([]);
   const [playlistFilter, setPlaylistFilter] = useState('');
   const [playlistName, setPlaylistName] = useState('');
-  const [musicDir, setMusicDir] = useState<string>('');
 
   const [downloadedPlaylistName, setDownloadedPlaylistName] = useState<string | null>(null);
 
-  // Get music directory path on mount
-  useEffect(() => {
-    invoke<string>('get_music_directory')
-      .then(setMusicDir)
-      .catch(console.error);
-  }, []);
-
-  // Reset sync state when leaving page and refresh local data on mount
   useEffect(() => {
     refreshLocalData();
     return () => {
@@ -90,14 +80,6 @@ export default function PlaylistUploader() {
             </p>
           </div>
         </div>
-
-        {/* Music folder path */}
-        {musicDir && (
-          <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/5 border border-white/10">
-            <FolderOpen className="w-4 h-4 text-muted" />
-            <span className="text-sm text-secondary font-mono">{musicDir}</span>
-          </div>
-        )}
       </div>
 
       {/* Error Display */}

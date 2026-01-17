@@ -5,8 +5,8 @@ use crate::launcher::{
     detect_hoyoplay_games, detect_steam_games,
     playtime_tracker::{start_game_session, PlaytimeTrackerState},
 };
-use crate::models::{AddGameRequest, DetectedGame, GameEntry, GameLibrary, GameSource, GameWhitelist, LibraryGame};
-use crate::utils::{get_game_library_json_path, get_game_whitelist_json_path};
+use crate::models::{AddGameRequest, DetectedGame, GameEntry, GameLibrary, GameSource, GameWhitelist, LibraryGame, GameScanCache};
+use crate::utils::{get_game_library_json_path, get_game_whitelist_json_path, get_game_scan_cache_json_path};
 use std::path::Path;
 use std::sync::Arc;
 use tauri::{AppHandle, State, Emitter};
@@ -42,28 +42,56 @@ pub fn get_game_library() -> Result<GameLibrary, String> {
         .map_err(|e| format!("Failed to read game library: {}", e))
 }
 
-/// Scan for games (Steam + HoyoPlay)
+/// Scan for games (Steam + HoyoPlay) with caching
 #[tauri::command]
-pub fn scan_for_games() -> Result<Vec<DetectedGame>, String> {
-    let mut all_games = Vec::new();
+pub fn scan_for_games(force_rescan: Option<bool>) -> Result<Vec<DetectedGame>, String> {
+    let cache_path = get_game_scan_cache_json_path();
+    let force = force_rescan.unwrap_or(false);
 
-    // Detect Steam games
+    // Try cache first
+    if !force {
+        if let Ok(cache) = read_json_file::<GameScanCache>(&cache_path) {
+            if cache.is_valid(GameScanCache::DEFAULT_TTL_SECONDS) {
+                let library: GameLibrary = read_json_file(&get_game_library_json_path()).unwrap_or_default();
+                let new_games: Vec<DetectedGame> = cache.games
+                    .into_iter()
+                    .filter(|g| !library.has_game_with_path(&g.executable_path))
+                    .collect();
+                return Ok(new_games);
+            }
+        }
+    }
+
+    // Fresh scan
+    let mut all_games = Vec::new();
     let steam_games = detect_steam_games();
     all_games.extend(steam_games);
-
-    // Detect HoyoPlay games
     let hoyoplay_games = detect_hoyoplay_games();
     all_games.extend(hoyoplay_games);
 
-    // Filter out games already in library
-    let library: GameLibrary = read_json_file(&get_game_library_json_path()).unwrap_or_default();
+    // Save to cache
+    let cache = GameScanCache::new(all_games.clone());
+    let _ = write_json_file(&cache_path, &cache);
 
+    // Filter against library
+    let library: GameLibrary = read_json_file(&get_game_library_json_path()).unwrap_or_default();
     let new_games: Vec<DetectedGame> = all_games
         .into_iter()
         .filter(|g| !library.has_game_with_path(&g.executable_path))
         .collect();
 
     Ok(new_games)
+}
+
+/// Clear game scan cache
+#[tauri::command]
+pub fn clear_game_scan_cache() -> Result<(), String> {
+    let cache_path = get_game_scan_cache_json_path();
+    if cache_path.exists() {
+        std::fs::remove_file(&cache_path)
+            .map_err(|e| format!("Failed to clear cache: {}", e))?;
+    }
+    Ok(())
 }
 
 /// Add detected games to library

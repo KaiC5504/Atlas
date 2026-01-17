@@ -87,6 +87,28 @@ impl GameLibrary {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GameScanCache {
+    pub timestamp: i64,
+    pub games: Vec<DetectedGame>,
+}
+
+impl GameScanCache {
+    pub const DEFAULT_TTL_SECONDS: i64 = 300; // 5 minutes
+
+    pub fn new(games: Vec<DetectedGame>) -> Self {
+        Self {
+            timestamp: chrono::Utc::now().timestamp(),
+            games,
+        }
+    }
+
+    pub fn is_valid(&self, ttl_seconds: i64) -> bool {
+        let now = chrono::Utc::now().timestamp();
+        (now - self.timestamp) < ttl_seconds
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct HoyoPlayGameConfig {
     pub name: &'static str,

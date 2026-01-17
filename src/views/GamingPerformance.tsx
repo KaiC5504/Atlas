@@ -16,6 +16,7 @@ import {
 import { useGamingData } from '../hooks/useGamingData';
 import { BottleneckIndicator } from '../components/gaming/BottleneckIndicator';
 import { SessionTimelineChart } from '../components/gaming/SessionTimelineChart';
+import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import {
   GamingSession,
   GamingSessionData,
@@ -55,6 +56,9 @@ export default function GamingPerformance() {
   const [newGameName, setNewGameName] = useState('');
   const [newGameProcess, setNewGameProcess] = useState('');
   const [addingGame, setAddingGame] = useState(false);
+
+  // Delete confirmation state
+  const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
 
   // Calculate session duration
   const sessionDuration = activeSession
@@ -112,14 +116,24 @@ export default function GamingPerformance() {
   };
 
   // Handle delete session
-  const handleDeleteSession = async (sessionId: string) => {
-    if (window.confirm('Delete this session? This cannot be undone.')) {
-      await deleteSession(sessionId);
+  const handleDeleteSession = (sessionId: string) => {
+    setSessionToDelete(sessionId);
+  };
+
+  // Confirm deletion
+  const confirmDeleteSession = async () => {
+    if (sessionToDelete) {
+      await deleteSession(sessionToDelete);
+      setSessionToDelete(null);
     }
   };
 
   // Get enabled games count
   const enabledGamesCount = whitelist?.games.filter((g) => g.enabled).length || 0;
+
+  const completedSessions = activeSession
+    ? sessions.filter((s) => s.id !== activeSession.id)
+    : sessions;
 
   return (
     <div className="animate-fade-in space-y-6">
@@ -259,14 +273,14 @@ export default function GamingPerformance() {
           <div className="text-center py-8">
             <Loader2 className="w-6 h-6 text-accent animate-spin mx-auto" />
           </div>
-        ) : sessions.length === 0 ? (
+        ) : completedSessions.length === 0 ? (
           <div className="text-center py-8 text-muted">
             <Clock className="w-8 h-8 mx-auto mb-2 opacity-50" />
             <p>No gaming sessions recorded yet</p>
           </div>
         ) : (
           <div className="space-y-2">
-            {sessions.slice(0, 10).map((session, idx) => (
+            {completedSessions.slice(0, 10).map((session, idx) => (
               <SessionHistoryItem
                 key={session.id}
                 session={session}
@@ -350,6 +364,18 @@ export default function GamingPerformance() {
           <Loader2 className="w-8 h-8 text-accent animate-spin" />
         </div>
       )}
+
+      {/* Delete Session Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={sessionToDelete !== null}
+        title="Delete Session"
+        message="Are you sure you want to delete this session? This action cannot be undone."
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        variant="danger"
+        onConfirm={confirmDeleteSession}
+        onCancel={() => setSessionToDelete(null)}
+      />
     </div>
   );
 }

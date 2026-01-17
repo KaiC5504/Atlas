@@ -8,6 +8,53 @@ use winreg::enums::*;
 #[cfg(windows)]
 use winreg::RegKey;
 
+/// Executables to NEVER select as the main game
+const BLACKLISTED_EXES: &[&str] = &[
+    // Launchers/updaters
+    "launcher.exe", "updater.exe", "update.exe", "patcher.exe",
+    "setup.exe", "install.exe", "installer.exe",
+    "uninstall.exe", "unins000.exe", "unins001.exe",
+    // Crash handlers
+    "crashhandler.exe", "crash_handler.exe", "crashreporter.exe",
+    "crashpad_handler.exe", "unitycrashandler64.exe", "unitycrashandler32.exe",
+    // Redistributables
+    "vcredist.exe", "dxsetup.exe", "dotnetfx.exe",
+    // Anti-cheat setup (not the game)
+    "easyanticheat_setup.exe", "battleye_launcher.exe",
+    // Misc utilities
+    "config.exe", "settings.exe", "options.exe", "benchmark.exe",
+];
+
+/// Preferred game executable names
+const WHITELISTED_EXES: &[&str] = &[
+    "game.exe", "play.exe", "client.exe", "start.exe",
+];
+
+fn is_blacklisted(exe_name: &str) -> bool {
+    let lower = exe_name.to_lowercase();
+    BLACKLISTED_EXES.iter().any(|&b| lower == b)
+        || (lower.starts_with("crash") && lower.ends_with(".exe"))
+}
+
+fn is_whitelisted(exe_name: &str) -> bool {
+    let lower = exe_name.to_lowercase();
+    WHITELISTED_EXES.iter().any(|&w| lower == w)
+}
+
+fn matches_game_name(exe_name: &str, game_name: &str) -> bool {
+    let exe_lower = exe_name.to_lowercase().replace(".exe", "");
+    let game_lower: String = game_name.to_lowercase()
+        .chars()
+        .filter(|c| c.is_alphanumeric())
+        .collect();
+    let exe_normalized: String = exe_lower
+        .chars()
+        .filter(|c| c.is_alphanumeric())
+        .collect();
+
+    exe_normalized.contains(&game_lower) || game_lower.contains(&exe_normalized)
+}
+
 /// Find Steam installation path from Windows registry
 #[cfg(windows)]
 pub fn find_steam_path() -> Option<PathBuf> {
@@ -118,13 +165,10 @@ struct AcfData {
     install_dir: Option<String>,
 }
 
-/// Find the main executable 
-fn find_game_executable(install_path: &Path) -> Option<PathBuf> {
+fn find_game_executable(install_path: &Path, game_name: Option<&str>) -> Option<PathBuf> {
     if !install_path.exists() {
         return None;
     }
-
-    let common_names = ["game.exe", "launcher.exe", "start.exe"];
 
     let mut exe_files: Vec<PathBuf> = Vec::new();
 
@@ -141,23 +185,46 @@ fn find_game_executable(install_path: &Path) -> Option<PathBuf> {
         }
     }
 
-    if exe_files.len() == 1 {
-        return Some(exe_files[0].clone());
+    if exe_files.is_empty() {
+        return None;
     }
 
-    for name in &common_names {
-        if let Some(exe) = exe_files.iter().find(|p| {
-            p.file_name()
-                .map(|n| n.to_string_lossy().to_lowercase() == *name)
-                .unwrap_or(false)
-        }) {
-            return Some(exe.clone());
+    for exe in &exe_files {
+        if let Some(name) = exe.file_name().and_then(|n| n.to_str()) {
+            if is_whitelisted(name) && !is_blacklisted(name) {
+                return Some(exe.clone());
+            }
         }
     }
 
-    exe_files.into_iter().max_by_key(|p| {
-        fs::metadata(p).map(|m| m.len()).unwrap_or(0)
-    })
+    if let Some(game) = game_name {
+        for exe in &exe_files {
+            if let Some(name) = exe.file_name().and_then(|n| n.to_str()) {
+                if matches_game_name(name, game) && !is_blacklisted(name) {
+                    return Some(exe.clone());
+                }
+            }
+        }
+    }
+
+    let non_blacklisted: Vec<_> = exe_files
+        .iter()
+        .filter(|p| {
+            p.file_name()
+                .and_then(|n| n.to_str())
+                .map(|n| !is_blacklisted(n))
+                .unwrap_or(false)
+        })
+        .collect();
+
+    if non_blacklisted.len() == 1 {
+        return Some(non_blacklisted[0].clone());
+    }
+
+    non_blacklisted
+        .into_iter()
+        .max_by_key(|p| fs::metadata(p).map(|m| m.len()).unwrap_or(0))
+        .cloned()
 }
 
 pub fn detect_steam_games() -> Vec<DetectedGame> {
@@ -193,7 +260,7 @@ pub fn detect_steam_games() -> Vec<DetectedGame> {
                     let install_dir = acf_data.install_dir.unwrap();
                     let install_path = steamapps.join("common").join(&install_dir);
 
-                    if let Some(exe_path) = find_game_executable(&install_path) {
+                    if let Some(exe_path) = find_game_executable(&install_path, acf_data.name.as_deref()) {
                         let icon_path = get_icon_cache_dir().and_then(|cache_dir| {
                             acf_data.app_id.as_ref()
                                 .and_then(|app_id| download_steam_icon(app_id, &cache_dir))

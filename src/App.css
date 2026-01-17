@@ -177,6 +177,21 @@ body {
   }
 }
 
+@utility animate-scale-in {
+  animation: scale-in 0.2s ease-out;
+}
+
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 /* ===== Custom Component Classes ===== */
 
 /* Status Badges */
@@ -255,6 +270,17 @@ body {
          outline-none
          transition-all duration-200
          focus:ring-2 focus:ring-accent-primary/30 focus:border-accent-primary/50;
+}
+
+/* Hide number input spinners for cleaner UI */
+.input[type="number"]::-webkit-inner-spin-button,
+.input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.input[type="number"] {
+  -moz-appearance: textfield;
 }
 
 .select {

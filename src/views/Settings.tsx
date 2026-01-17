@@ -1,4 +1,3 @@
-// Settings view - app configuration
 import { useState, useEffect, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import type { Settings as SettingsType, UpdateSettingsParams } from '../types';
@@ -12,7 +11,6 @@ import {
   Loader2,
   CheckCircle,
   AlertCircle,
-  Hash,
   Code,
   ToggleLeft,
   ToggleRight,
@@ -22,7 +20,16 @@ import {
   Monitor,
 } from 'lucide-react';
 import { DraggableNavList } from '../components/DraggableNavList';
+import { CustomSelect } from '../components/ui/CustomSelect';
 import { useNavigationSettingsContext } from '../contexts';
+
+const QUALITY_OPTIONS = [
+  { value: 'best', label: 'Best Quality' },
+  { value: '1080p', label: '1080p' },
+  { value: '720p', label: '720p' },
+  { value: '480p', label: '480p' },
+  { value: 'audio_only', label: 'Audio Only' },
+];
 
 // Type for download path validation result
 interface DownloadPathValidation {
@@ -306,30 +313,27 @@ export function Settings() {
                     <label className="block text-sm font-medium text-text-secondary mb-2">
                       Default Quality
                     </label>
-                    <select
+                    <CustomSelect
                       value={defaultQuality}
-                      onChange={(e) => setDefaultQuality(e.target.value)}
+                      onChange={setDefaultQuality}
                       disabled={saving}
-                      className="select"
-                    >
-                      <option value="best">Best Quality</option>
-                      <option value="1080p">1080p</option>
-                      <option value="720p">720p</option>
-                      <option value="480p">480p</option>
-                      <option value="audio_only">Audio Only</option>
-                    </select>
+                      options={QUALITY_OPTIONS}
+                    />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-text-secondary mb-2">
-                      <Hash size={14} className="inline mr-2" />
                       Max Concurrent Downloads
                     </label>
                     <input
                       type="number"
                       min="1"
                       max="10"
-                      value={maxConcurrentDownloads}
-                      onChange={(e) => setMaxConcurrentDownloads(parseInt(e.target.value) || 1)}
+                      value={maxConcurrentDownloads || ''}
+                      onChange={(e) => setMaxConcurrentDownloads(parseInt(e.target.value) || 0)}
+                      onBlur={(e) => {
+                        const val = parseInt(e.target.value) || 1;
+                        setMaxConcurrentDownloads(Math.min(10, Math.max(1, val)));
+                      }}
                       disabled={saving}
                       className="input"
                     />
@@ -347,15 +351,18 @@ export function Settings() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-text-secondary mb-2">
-                  <Hash size={14} className="inline mr-2" />
                   Max Concurrent ML Jobs
                 </label>
                 <input
                   type="number"
                   min="1"
                   max="5"
-                  value={maxConcurrentMLJobs}
-                  onChange={(e) => setMaxConcurrentMLJobs(parseInt(e.target.value) || 1)}
+                  value={maxConcurrentMLJobs || ''}
+                  onChange={(e) => setMaxConcurrentMLJobs(parseInt(e.target.value) || 0)}
+                  onBlur={(e) => {
+                    const val = parseInt(e.target.value) || 1;
+                    setMaxConcurrentMLJobs(Math.min(5, Math.max(1, val)));
+                  }}
                   disabled={saving}
                   className="input max-w-xs"
                 />
