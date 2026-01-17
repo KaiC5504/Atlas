@@ -17,6 +17,8 @@ pub struct UpdateSettingsParams {
     pub sidebar_order: Option<Vec<String>>,
     pub hidden_sidebar_items: Option<Vec<String>>,
     pub discord_rich_presence_enabled: Option<bool>,
+    pub run_on_startup: Option<bool>,
+    pub close_to_tray: Option<bool>,
 }
 
 /// Get current settings from the JSON file
@@ -95,6 +97,12 @@ pub fn update_settings(settings: UpdateSettingsParams) -> Result<Settings, Strin
     }
     if let Some(discord_rich_presence_enabled) = settings.discord_rich_presence_enabled {
         current_settings.discord_rich_presence_enabled = discord_rich_presence_enabled;
+    }
+    if let Some(run_on_startup) = settings.run_on_startup {
+        current_settings.run_on_startup = run_on_startup;
+    }
+    if let Some(close_to_tray) = settings.close_to_tray {
+        current_settings.close_to_tray = close_to_tray;
     }
 
     write_json_file(&path, &current_settings)?;

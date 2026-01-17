@@ -25,6 +25,8 @@ export interface Settings {
   sidebar_order: string[] | null;
   hidden_sidebar_items: string[] | null;
   discord_rich_presence_enabled: boolean;
+  run_on_startup: boolean;
+  close_to_tray: boolean;
 }
 
 export interface UpdateSettingsParams {
@@ -40,4 +42,6 @@ export interface UpdateSettingsParams {
   sidebar_order?: string[];
   hidden_sidebar_items?: string[];
   discord_rich_presence_enabled?: boolean;
+  run_on_startup?: boolean;
+  close_to_tray?: boolean;
 }

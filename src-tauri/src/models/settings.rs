@@ -28,6 +28,10 @@ pub struct Settings {
     pub hidden_sidebar_items: Option<Vec<String>>,
     #[serde(default)]
     pub discord_rich_presence_enabled: bool,
+    #[serde(default)]
+    pub run_on_startup: bool,
+    #[serde(default)]
+    pub close_to_tray: bool,
 }
 
 impl Default for Settings {
@@ -45,6 +49,8 @@ impl Default for Settings {
             sidebar_order: None,
             hidden_sidebar_items: None,
             discord_rich_presence_enabled: false,
+            run_on_startup: false,
+            close_to_tray: false,
         }
     }
 }

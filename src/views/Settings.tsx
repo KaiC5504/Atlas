@@ -19,6 +19,7 @@ import {
   GripVertical,
   MessageSquare,
   Info,
+  Monitor,
 } from 'lucide-react';
 import { DraggableNavList } from '../components/DraggableNavList';
 import { useNavigationSettingsContext } from '../contexts';
@@ -56,6 +57,10 @@ export function Settings() {
   const [discordEnabled, setDiscordEnabled] = useState(false);
   const [discordConnected, setDiscordConnected] = useState(false);
   const [discordConnecting, setDiscordConnecting] = useState(false);
+
+  // Startup & Tray state
+  const [runOnStartup, setRunOnStartup] = useState(false);
+  const [closeToTray, setCloseToTray] = useState(false);
 
   const {
     developerModeEnabled,
@@ -111,6 +116,8 @@ export function Settings() {
       setRemoteUpdatePath(result.remote_update_path || '');
       setUpdateUrlBase(result.update_url_base || '');
       setDiscordEnabled(result.discord_rich_presence_enabled);
+      setRunOnStartup(result.run_on_startup);
+      setCloseToTray(result.close_to_tray);
 
       // Check Discord connection status
       const connected = await invoke<boolean>('is_discord_connected');
@@ -180,6 +187,28 @@ export function Settings() {
     await invoke('update_settings', {
       settings: { discord_rich_presence_enabled: newEnabled },
     });
+  }
+
+  async function handleRunOnStartupToggle() {
+    const newEnabled = !runOnStartup;
+    setRunOnStartup(newEnabled);
+    try {
+      if (newEnabled) {
+        await invoke('enable_autostart');
+      } else {
+        await invoke('disable_autostart');
+      }
+      await invoke('update_settings', { settings: { run_on_startup: newEnabled } });
+    } catch (err) {
+      setRunOnStartup(!newEnabled); // Revert on failure
+      setMessage({ type: 'error', text: `Failed to toggle run on startup: ${err}` });
+    }
+  }
+
+  async function handleCloseToTrayToggle() {
+    const newEnabled = !closeToTray;
+    setCloseToTray(newEnabled);
+    await invoke('update_settings', { settings: { close_to_tray: newEnabled } });
   }
 
   return (
@@ -397,6 +426,66 @@ export function Settings() {
                   {discordEnabled ? <ToggleRight size={32} /> : <ToggleLeft size={32} />}
                 </button>
               </div>
+            </div>
+          </div>
+
+          {/* Startup & Tray Behavior */}
+          <div className="card">
+            <div className="flex items-center gap-2 mb-4">
+              <Monitor size={18} className="text-indigo-400" />
+              <h2 className="card-title mb-0">Startup & Tray</h2>
+            </div>
+
+            {/* Run on Startup Toggle */}
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <label className="block text-sm font-medium text-text-secondary">
+                  Run on Startup
+                </label>
+                <p className="text-xs text-text-muted mt-0.5">
+                  Automatically start Atlas when Windows starts (minimized to tray)
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleRunOnStartupToggle}
+                disabled={saving}
+                className={`
+                  p-1 rounded-lg transition-colors
+                  ${runOnStartup
+                    ? 'text-indigo-400 hover:text-indigo-300'
+                    : 'text-text-muted hover:text-text-secondary'
+                  }
+                `}
+              >
+                {runOnStartup ? <ToggleRight size={32} /> : <ToggleLeft size={32} />}
+              </button>
+            </div>
+
+            {/* Close to Tray Toggle */}
+            <div className="flex items-center justify-between">
+              <div>
+                <label className="block text-sm font-medium text-text-secondary">
+                  Close to Tray
+                </label>
+                <p className="text-xs text-text-muted mt-0.5">
+                  Minimize to system tray instead of closing when clicking X
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleCloseToTrayToggle}
+                disabled={saving}
+                className={`
+                  p-1 rounded-lg transition-colors
+                  ${closeToTray
+                    ? 'text-indigo-400 hover:text-indigo-300'
+                    : 'text-text-muted hover:text-text-secondary'
+                  }
+                `}
+              >
+                {closeToTray ? <ToggleRight size={32} /> : <ToggleLeft size={32} />}
+              </button>
             </div>
           </div>
 

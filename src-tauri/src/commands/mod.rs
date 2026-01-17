@@ -1,5 +1,6 @@
 pub mod audio_detection;
 pub mod auth;
+pub mod autostart;
 pub mod discord;
 pub mod downloads;
 pub mod gaming;

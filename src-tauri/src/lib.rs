@@ -15,6 +15,7 @@ use commands::{
         submit_audio_detection_job,
     },
     auth::{capture_auth_cookies, close_auth_window, get_auth_status, get_stored_credentials, logout, open_auth_window},
+    autostart::{disable_autostart, enable_autostart, is_autostart_enabled},
     discord::{connect_discord, disconnect_discord, is_discord_connected},
     downloads::{add_download, cancel_download, delete_download, list_downloads, start_download, validate_download_path},
     gaming::{
@@ -55,7 +56,11 @@ use models::{BottleneckThresholds, GameLibrary, GameWhitelist, GamingSession, Qu
 use performance::{MonitoringState, SharedMetrics};
 use std::fs;
 use std::sync::Arc;
-use tauri::Manager;
+use tauri::{
+    menu::{Menu, MenuItem},
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    Manager, WindowEvent,
+};
 use utils::{
     get_audio_detection_jobs_json_path, get_bottleneck_thresholds_json_path, get_downloads_json_path,
     get_game_library_json_path, get_game_whitelist_json_path, get_gaming_sessions_json_path,
@@ -108,6 +113,21 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            Some(vec!["--autostart"]),
+        ))
+        .on_window_event(|window, event| {
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                if window.label() == "main" {
+                    let settings = get_settings().unwrap_or_default();
+                    if settings.close_to_tray {
+                        api.prevent_close();
+                        let _ = window.hide();
+                    }
+                }
+            }
+        })
         .manage(Arc::new(MonitoringState::default()))
         .manage(detection_state.clone())
         .manage(bottleneck_analyzer.clone())
@@ -139,6 +159,57 @@ pub fn run() {
                     eprintln!("Failed to connect to Discord: {}", e);
                 } else {
                     println!("Discord Rich Presence connected");
+                }
+            }
+
+            // Create tray menu
+            let show_item = MenuItem::with_id(app, "show", "Show Window", true, None::<&str>)?;
+            let quit_item = MenuItem::with_id(app, "quit", "Quit Atlas", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&show_item, &quit_item])?;
+
+            // Build tray icon
+            let _tray = TrayIconBuilder::new()
+                .icon(app.default_window_icon().unwrap().clone())
+                .menu(&menu)
+                .show_menu_on_left_click(false)
+                .on_menu_event(|app, event| match event.id.as_ref() {
+                    "show" => {
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.show();
+                            let _ = window.unminimize();
+                            let _ = window.set_focus();
+                        }
+                    }
+                    "quit" => {
+                        app.exit(0);
+                    }
+                    _ => {}
+                })
+                .on_tray_icon_event(|tray, event| {
+                    if let TrayIconEvent::Click {
+                        button: MouseButton::Left,
+                        button_state: MouseButtonState::Up,
+                        ..
+                    } = event
+                    {
+                        let app = tray.app_handle();
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.show();
+                            let _ = window.unminimize();
+                            let _ = window.set_focus();
+                        }
+                    }
+                })
+                .build(app)?;
+
+            // Check if launched via autostart (--autostart flag)
+            let args: Vec<String> = std::env::args().collect();
+            let is_autostart_launch = args.iter().any(|arg| arg == "--autostart");
+
+            if is_autostart_launch && settings.run_on_startup {
+                // Don't show window on autostart - tray only
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.hide();
                 }
             }
 
@@ -193,6 +264,10 @@ pub fn run() {
             connect_discord,
             disconnect_discord,
             is_discord_connected,
+            // Autostart commands
+            enable_autostart,
+            disable_autostart,
+            is_autostart_enabled,
             // Server monitoring
             get_server_config,
             update_server_config,
