@@ -12,6 +12,12 @@ use std::path::PathBuf;
 use winreg::enums::*;
 #[cfg(windows)]
 use winreg::RegKey;
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
+
+// Windows constant to hide console window
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 use crate::models::launcher::{DetectedGame, GameSource};
 use crate::launcher::icon_extractor::{extract_icon_from_exe, get_icon_cache_dir, download_riot_icon};
@@ -371,6 +377,7 @@ Write-Output 'SUCCESS'
 
     let result = Command::new("powershell")
         .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", &ps_script])
+        .creation_flags(CREATE_NO_WINDOW)
         .output();
 
     match result {

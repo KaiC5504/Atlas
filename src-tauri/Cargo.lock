@@ -233,7 +233,7 @@ dependencies = [
 
 [[package]]
 name = "atlas"
-version = "1.5.1"
+version = "1.5.4"
 dependencies = [
  "base64 0.22.1",
  "chrono",

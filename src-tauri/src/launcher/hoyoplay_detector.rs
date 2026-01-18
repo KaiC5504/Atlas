@@ -10,6 +10,12 @@ use winreg::RegKey;
 use std::ffi::OsStr;
 #[cfg(windows)]
 use std::os::windows::ffi::OsStrExt;
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
+
+// Windows constant to hide console window
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 // ============================================================================
 // HoYoPlay Config File Detection (Priority 1 - Most Reliable)
@@ -296,6 +302,7 @@ fn resolve_shortcut(lnk_path: &Path) -> Option<PathBuf> {
 
     std::process::Command::new("powershell")
         .args(["-NoProfile", "-NonInteractive", "-Command", &ps_script])
+        .creation_flags(CREATE_NO_WINDOW)
         .output()
         .ok()
         .and_then(|o| {

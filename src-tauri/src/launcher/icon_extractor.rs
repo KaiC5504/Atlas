@@ -5,6 +5,13 @@ use std::io::Read;
 use std::path::Path;
 use std::process::Command;
 
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
+
+// Windows constant to hide console window
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
 /// Extract icon from an executable and save it as PNG (256x256 HD)
 /// Returns the path to the saved icon file, or None if extraction failed
 #[cfg(windows)]
@@ -70,6 +77,7 @@ try {{
 
     let result = Command::new("powershell")
         .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", &ps_script])
+        .creation_flags(CREATE_NO_WINDOW)
         .output();
 
     match result {
@@ -206,6 +214,7 @@ if ($icon) {{
 
     let result = Command::new("powershell")
         .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", &ps_script])
+        .creation_flags(CREATE_NO_WINDOW)
         .output();
 
     match result {
