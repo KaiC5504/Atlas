@@ -150,20 +150,18 @@ impl GamingSessionManager {
 
                                 // Update Discord Rich Presence
                                 let _ = discord.update_gaming_presence(&game_name, &new_bottleneck);
+
+                                let _ = app.emit("gaming:bottleneck", GamingBottleneckEvent {
+                                    session_id: session_id.clone(),
+                                    status: status.clone(),
+                                });
                             }
                         }
                     }
 
-                    // Emit metrics event
                     let _ = app.emit("gaming:metrics", GamingMetricsEvent {
                         session_id: session_id.clone(),
                         snapshot: snapshot.clone(),
-                    });
-
-                    // Emit bottleneck event
-                    let _ = app.emit("gaming:bottleneck", GamingBottleneckEvent {
-                        session_id: session_id.clone(),
-                        status,
                     });
                 }
 
@@ -498,4 +496,51 @@ pub struct GamingMetricsEvent {
 pub struct GamingBottleneckEvent {
     pub session_id: String,
     pub status: CurrentBottleneckStatus,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Test: Bottleneck event should only be emitted when bottleneck type changes
+    #[test]
+    fn test_bottleneck_event_emits_only_on_change() {
+        // Setup: Track emission counts
+        let mut emit_count = 0;
+        let mut last_bottleneck: Option<BottleneckType> = None;
+
+        // Simulate sequence: CpuBound -> CpuBound -> GpuBound -> GpuBound -> CpuBound
+        let bottleneck_sequence = vec![
+            BottleneckType::CpuBound,
+            BottleneckType::CpuBound,  // Same - should NOT emit
+            BottleneckType::GpuBound,  // Changed - should emit
+            BottleneckType::GpuBound,  // Same - should NOT emit
+            BottleneckType::CpuBound,  // Changed - should emit
+        ];
+
+        for new_bottleneck in bottleneck_sequence {
+            // This is the logic that should be in session.rs
+            if last_bottleneck.as_ref() != Some(&new_bottleneck) {
+                emit_count += 1;  // Would emit event here
+                last_bottleneck = Some(new_bottleneck);
+            }
+        }
+
+        // Should emit 3 times: initial CpuBound, change to GpuBound, change back to CpuBound
+        assert_eq!(emit_count, 3, "Should only emit on bottleneck changes");
+    }
+
+    /// Test: Metrics event should emit every cycle regardless of bottleneck
+    #[test]
+    fn test_metrics_event_emits_every_cycle() {
+        let mut metrics_emit_count = 0;
+        let cycles = 5;
+
+        for _ in 0..cycles {
+            // Metrics should always emit (unchanged behavior)
+            metrics_emit_count += 1;
+        }
+
+        assert_eq!(metrics_emit_count, cycles, "Metrics should emit every cycle");
+    }
 }

@@ -64,6 +64,8 @@ export function usePerformanceData(): UsePerformanceDataReturn {
 
     const setup = async () => {
       unlistenUpdate = await listen<SystemMetrics>('performance:update', (event) => {
+        if (document.hidden) return;
+
         const metrics = event.payload;
         const now = metrics.timestamp;
 
@@ -88,7 +90,6 @@ export function usePerformanceData(): UsePerformanceDataReturn {
         });
       });
 
-      // Listen for monitoring stopped event
       unlistenStopped = await listen<{ reason: string }>('performance:monitoring_stopped', (event) => {
         console.log('Performance monitoring stopped:', event.payload.reason);
         setIsMonitoring(false);

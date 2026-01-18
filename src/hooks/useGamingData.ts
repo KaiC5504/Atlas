@@ -1,4 +1,3 @@
-// Gaming Performance Analyzer hook
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
@@ -250,6 +249,8 @@ export function useGamingData(): UseGamingDataReturn {
       const unlistenBottleneck = await listen<GamingBottleneckEvent>(
         'gaming:bottleneck',
         (event) => {
+          if (document.hidden) return;
+
           const currentSession = activeSessionRef.current;
           if (event.payload.session_id === currentSession?.id) {
             setCurrentBottleneck(event.payload.status);
@@ -261,6 +262,8 @@ export function useGamingData(): UseGamingDataReturn {
       const unlistenMetrics = await listen<GamingMetricsEvent>(
         'gaming:metrics',
         (event) => {
+          if (document.hidden) return;
+
           const currentSession = activeSessionRef.current;
           if (event.payload.session_id === currentSession?.id) {
             setRealtimeMetrics((prev) => {

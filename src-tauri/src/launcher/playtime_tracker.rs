@@ -98,7 +98,7 @@ pub fn start_game_session(
 }
 
 fn wait_for_process_exit(process_name: &str) {
-    use sysinfo::System;
+    use sysinfo::{ProcessRefreshKind, System};
 
     let process_name_lower = process_name.to_lowercase();
     let mut sys = System::new();
@@ -107,7 +107,7 @@ fn wait_for_process_exit(process_name: &str) {
     const MAX_INTERVAL: u64 = 30;
 
     loop {
-        sys.refresh_processes();
+        sys.refresh_processes_specifics(ProcessRefreshKind::new());
 
         let is_running = sys.processes().values().any(|p| {
             p.name().to_lowercase() == process_name_lower
@@ -122,7 +122,7 @@ fn wait_for_process_exit(process_name: &str) {
     }
 }
 
-#[allow(dead_code)] 
+#[allow(dead_code)]
 pub fn get_active_game_sessions(state: &PlaytimeTrackerState) -> Vec<String> {
     state
         .active_sessions
@@ -131,4 +131,35 @@ pub fn get_active_game_sessions(state: &PlaytimeTrackerState) -> Vec<String> {
         .keys()
         .cloned()
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use sysinfo::{ProcessRefreshKind, System};
+
+    /// Test: ProcessRefreshKind::new() creates minimal refresh scope
+    #[test]
+    fn test_minimal_process_refresh_kind() {
+        let refresh_kind = ProcessRefreshKind::new();
+
+        // Verify it's the minimal variant (no CPU, memory, disk, etc.)
+        // ProcessRefreshKind::new() should have all fields set to false/minimal
+        assert!(!refresh_kind.cpu(), "Should not refresh CPU data");
+        assert!(!refresh_kind.disk_usage(), "Should not refresh disk usage");
+        assert!(!refresh_kind.memory(), "Should not refresh memory data");
+    }
+
+    /// Test: Process existence check works with minimal refresh
+    #[test]
+    fn test_process_exists_with_minimal_refresh() {
+        let mut sys = System::new();
+
+        // Use minimal refresh
+        sys.refresh_processes_specifics(ProcessRefreshKind::new());
+
+        // Should still be able to check if processes exist
+        // (the current process should always exist)
+        let current_pid = sysinfo::get_current_pid().unwrap();
+        assert!(sys.process(current_pid).is_some(), "Should find current process");
+    }
 }
