@@ -141,7 +141,7 @@ pub fn run() {
             }
             #[cfg(not(debug_assertions))]
             {
-                tauri::plugin::Builder::new("mcp-bridge-noop").build()
+                tauri::plugin::Builder::<tauri::Wry, ()>::new("mcp-bridge-noop").build()
             }
         })
         .on_window_event(|window, event| {

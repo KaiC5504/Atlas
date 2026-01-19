@@ -272,6 +272,16 @@ export function useGamingData(): UseGamingDataReturn {
               const filtered = prev.filter((m) => m.timestamp > fiveMinutesAgo);
               return [...filtered, event.payload.snapshot];
             });
+
+            // Update currentBottleneck metrics in real-time (bottleneck type stays the same)
+            const snapshot = event.payload.snapshot;
+            setCurrentBottleneck((prev) => {
+              if (!prev) return prev;
+              return {
+                ...prev,
+                metrics: snapshot,
+              };
+            });
           }
         }
       );
