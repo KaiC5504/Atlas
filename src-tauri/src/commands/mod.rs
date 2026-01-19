@@ -10,5 +10,6 @@ pub mod performance;
 pub mod playlist_uploader;
 pub mod server;
 pub mod settings;
+pub mod task_monitor;
 pub mod updater;
 pub mod valorant;

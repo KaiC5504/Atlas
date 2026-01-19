@@ -223,15 +223,40 @@ pub fn start_game_detection(
             if let Err(e) = app.emit("performance:monitoring_stopped", json!({ "reason": "game_closed" })) {
                 eprintln!("Failed to emit monitoring_stopped event: {}", e);
             }
+
+            use crate::commands::settings::get_settings;
+            use crate::task_monitor::restore;
+
+            let settings = get_settings().unwrap_or_default();
+            if settings.auto_restore_enabled {
+                println!("Auto-restore enabled, waiting 3 seconds before restoring processes...");
+
+                std::thread::sleep(std::time::Duration::from_secs(3));
+
+                if let Ok(restore_list) = restore::load_restore_list() {
+                    if !restore_list.processes.is_empty() {
+                        println!("Restoring {} killed processes...", restore_list.processes.len());
+                        let result = restore::restore_all_processes(&restore_list);
+                        println!("Restore complete: {} restored, {} skipped, {} failed",
+                                 result.restored, result.skipped_self_restoring, result.failed);
+
+                        if let Err(e) = app.emit("task_monitor:restore_completed", &result) {
+                            eprintln!("Failed to emit restore_completed event: {}", e);
+                        }
+
+                        if let Err(e) = restore::clear_restore_list() {
+                            eprintln!("Failed to clear restore list: {}", e);
+                        }
+                    }
+                }
+            }
         };
 
-        // Try to use Windows process handle wait for instant detection
         #[cfg(windows)]
         {
             use windows_sys::Win32::Foundation::{CloseHandle, WAIT_OBJECT_0, WAIT_TIMEOUT};
             use windows_sys::Win32::System::Threading::{OpenProcess, WaitForSingleObject, PROCESS_SYNCHRONIZE};
 
-            // Find the game process PID
             system.refresh_processes_specifics(ProcessRefreshKind::new());
             let game_pid = system.processes().iter()
                 .find(|(_, p)| {
@@ -250,9 +275,6 @@ pub fn start_game_detection(
                 if strategy == DetectionStrategy::HandleWait {
                     println!("Phase 2: Using process handle wait for instant exit detection (PID: {})", pid);
 
-                    // Wait for process termination using kernel wait state (zero CPU usage)
-                    loop {
-                        // Check every 100ms to allow clean shutdown if needed
                         let result = unsafe { WaitForSingleObject(handle, 100) };
 
                         let wait_result = match result {
@@ -269,13 +291,11 @@ pub fn start_game_detection(
                                 break;
                             }
                             WaitResultAction::ContinueWaiting => {
-                                // Still running, continue waiting (zero CPU in kernel wait)
                                 continue;
                             }
                             WaitResultAction::FallbackToPolling => {
                                 println!("Process handle invalid, falling back to polling");
                                 unsafe { CloseHandle(handle) };
-                                // Fall through to polling below
                                 break;
                             }
                         }
@@ -291,7 +311,6 @@ pub fn start_game_detection(
             }
         }
 
-        // Polling fallback (used on non-Windows or when handle acquisition fails)
         let mut check_interval = 5u64;
         const MAX_INTERVAL: u64 = 30;
 
@@ -314,7 +333,6 @@ pub fn start_game_detection(
                 break;
             }
 
-            // Exponential backoff - reduces CPU usage for long gaming sessions
             check_interval = (check_interval * 2).min(MAX_INTERVAL);
         }
 
@@ -337,27 +355,20 @@ pub fn is_detection_running(detection_state: Arc<GameDetectionState>) -> bool {
 mod tests {
     use super::*;
 
-    // ===== Detection Strategy Tests =====
-
-    /// Test: Windows + handle acquired = use handle wait
     #[test]
     fn test_detection_strategy_windows_handle_acquired() {
         let strategy = determine_detection_strategy(true, true);
         assert_eq!(strategy, DetectionStrategy::HandleWait);
     }
 
-    /// Test: Windows + handle NOT acquired = use polling fallback
     #[test]
     fn test_detection_strategy_windows_handle_failed() {
         let strategy = determine_detection_strategy(false, true);
         assert_eq!(strategy, DetectionStrategy::Polling);
     }
 
-    /// Test: Logic when is_windows=false (validates helper function behavior)
-    /// Note: App is Windows-only, but we test all logic paths for correctness
     #[test]
     fn test_detection_strategy_is_windows_false() {
-        // When is_windows=false, should always return Polling
         let strategy = determine_detection_strategy(true, false);
         assert_eq!(strategy, DetectionStrategy::Polling);
 
@@ -365,44 +376,34 @@ mod tests {
         assert_eq!(strategy, DetectionStrategy::Polling);
     }
 
-    // ===== Wait Result Handling Tests =====
-
-    /// Test: ProcessExited result should end session
     #[test]
     fn test_wait_result_process_exited() {
         let action = handle_wait_result(WaitResult::ProcessExited);
         assert_eq!(action, WaitResultAction::EndSession);
     }
 
-    /// Test: Timeout result should continue waiting
     #[test]
     fn test_wait_result_timeout() {
         let action = handle_wait_result(WaitResult::Timeout);
         assert_eq!(action, WaitResultAction::ContinueWaiting);
     }
 
-    /// Test: InvalidHandle result should fallback to polling
     #[test]
     fn test_wait_result_invalid_handle() {
         let action = handle_wait_result(WaitResult::InvalidHandle);
         assert_eq!(action, WaitResultAction::FallbackToPolling);
     }
 
-    // ===== Integration Flow Tests =====
-
-    /// Test: Full flow simulation - handle wait success path
     #[test]
     fn test_full_flow_handle_wait_success() {
-        // Simulate Windows environment with successful handle acquisition
         let strategy = determine_detection_strategy(true, true);
         assert_eq!(strategy, DetectionStrategy::HandleWait);
 
-        // Simulate wait loop iterations
         let mut iterations = 0;
         let wait_results = vec![
-            WaitResult::Timeout,       // Still running
-            WaitResult::Timeout,       // Still running
-            WaitResult::ProcessExited, // Game closed!
+            WaitResult::Timeout,      
+            WaitResult::Timeout,      
+            WaitResult::ProcessExited, 
         ];
 
         for result in wait_results {
@@ -416,25 +417,19 @@ mod tests {
         assert_eq!(iterations, 3, "Should process all results until exit");
     }
 
-    /// Test: Full flow simulation - fallback to polling
     #[test]
     fn test_full_flow_fallback_to_polling() {
-        // Simulate Windows environment with failed handle acquisition
         let strategy = determine_detection_strategy(false, true);
         assert_eq!(strategy, DetectionStrategy::Polling);
 
-        // Should use polling, not handle wait
-        // Polling logic would be tested separately
     }
 
-    /// Test: Full flow simulation - handle becomes invalid mid-wait
     #[test]
     fn test_full_flow_handle_invalid_mid_wait() {
-        // Simulate handle becoming invalid during wait
         let wait_results = vec![
-            WaitResult::Timeout,       // Still running
-            WaitResult::Timeout,       // Still running
-            WaitResult::InvalidHandle, // Handle became invalid
+            WaitResult::Timeout,      
+            WaitResult::Timeout,      
+            WaitResult::InvalidHandle, 
         ];
 
         let mut fell_back_to_polling = false;
@@ -449,20 +444,17 @@ mod tests {
         assert!(fell_back_to_polling, "Should fallback to polling when handle becomes invalid");
     }
 
-    /// Test: Verify current platform detection (meta-test)
     #[test]
     fn test_current_platform_detection() {
         let is_windows = cfg!(windows);
         let is_linux = cfg!(target_os = "linux");
         let is_macos = cfg!(target_os = "macos");
 
-        // At least one should be true
         assert!(
             is_windows || is_linux || is_macos,
             "Should detect a known platform"
         );
 
-        // On Linux (dev container), should use polling strategy
         if is_linux {
             let strategy = determine_detection_strategy(true, false);
             assert_eq!(strategy, DetectionStrategy::Polling);

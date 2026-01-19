@@ -18,6 +18,7 @@ import {
   MessageSquare,
   Info,
   Monitor,
+  ListTodo,
 } from 'lucide-react';
 import { DraggableNavList } from '../components/DraggableNavList';
 import { CustomSelect } from '../components/ui/CustomSelect';
@@ -31,7 +32,6 @@ const QUALITY_OPTIONS = [
   { value: 'audio_only', label: 'Audio Only' },
 ];
 
-// Type for download path validation result
 interface DownloadPathValidation {
   valid: boolean;
   resolved_path: string;
@@ -69,6 +69,9 @@ export function Settings() {
   const [runOnStartup, setRunOnStartup] = useState(false);
   const [closeToTray, setCloseToTray] = useState(false);
 
+  // Task Monitor state
+  const [autoRestoreEnabled, setAutoRestoreEnabled] = useState(false);
+
   const {
     developerModeEnabled,
     orderedItems,
@@ -104,7 +107,7 @@ export function Settings() {
   useEffect(() => {
     const timer = setTimeout(() => {
       validatePath(downloadPath);
-    }, 300); // Debounce 300ms
+    }, 300);
 
     return () => clearTimeout(timer);
   }, [downloadPath, validatePath]);
@@ -125,6 +128,7 @@ export function Settings() {
       setDiscordEnabled(result.discord_rich_presence_enabled);
       setRunOnStartup(result.run_on_startup);
       setCloseToTray(result.close_to_tray);
+      setAutoRestoreEnabled(result.auto_restore_enabled);
 
       // Check Discord connection status
       const connected = await invoke<boolean>('is_discord_connected');
@@ -175,7 +179,7 @@ export function Settings() {
       } catch (err) {
         setMessage({ type: 'error', text: `Discord connection failed: ${err}` });
         setDiscordConnected(false);
-        setDiscordEnabled(false); // Revert toggle on failure
+        setDiscordEnabled(false); 
         return;
       } finally {
         setDiscordConnecting(false);
@@ -207,7 +211,7 @@ export function Settings() {
       }
       await invoke('update_settings', { settings: { run_on_startup: newEnabled } });
     } catch (err) {
-      setRunOnStartup(!newEnabled); // Revert on failure
+      setRunOnStartup(!newEnabled); 
       setMessage({ type: 'error', text: `Failed to toggle run on startup: ${err}` });
     }
   }
@@ -216,6 +220,12 @@ export function Settings() {
     const newEnabled = !closeToTray;
     setCloseToTray(newEnabled);
     await invoke('update_settings', { settings: { close_to_tray: newEnabled } });
+  }
+
+  async function handleAutoRestoreToggle() {
+    const newEnabled = !autoRestoreEnabled;
+    setAutoRestoreEnabled(newEnabled);
+    await invoke('update_settings', { settings: { auto_restore_enabled: newEnabled } });
   }
 
   return (
@@ -492,6 +502,40 @@ export function Settings() {
                 `}
               >
                 {closeToTray ? <ToggleRight size={32} /> : <ToggleLeft size={32} />}
+              </button>
+            </div>
+          </div>
+
+          {/* Task Monitor */}
+          <div className="card">
+            <div className="flex items-center gap-2 mb-4">
+              <ListTodo size={18} className="text-green-400" />
+              <h2 className="card-title mb-0">Task Monitor</h2>
+            </div>
+
+            {/* Auto-Restore Toggle */}
+            <div className="flex items-center justify-between">
+              <div>
+                <label className="block text-sm font-medium text-text-secondary">
+                  Auto-Restore Processes
+                </label>
+                <p className="text-xs text-text-muted mt-0.5">
+                  Automatically restart killed processes after gaming sessions end
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleAutoRestoreToggle}
+                disabled={saving}
+                className={`
+                  p-1 rounded-lg transition-colors
+                  ${autoRestoreEnabled
+                    ? 'text-green-400 hover:text-green-300'
+                    : 'text-text-muted hover:text-text-secondary'
+                  }
+                `}
+              >
+                {autoRestoreEnabled ? <ToggleRight size={32} /> : <ToggleLeft size={32} />}
               </button>
             </div>
           </div>

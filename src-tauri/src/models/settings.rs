@@ -32,6 +32,8 @@ pub struct Settings {
     pub run_on_startup: bool,
     #[serde(default)]
     pub close_to_tray: bool,
+    #[serde(default)]
+    pub auto_restore_enabled: bool,
 }
 
 impl Default for Settings {
@@ -51,6 +53,7 @@ impl Default for Settings {
             discord_rich_presence_enabled: false,
             run_on_startup: false,
             close_to_tray: false,
+            auto_restore_enabled: false,
         }
     }
 }

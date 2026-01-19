@@ -1,9 +1,7 @@
-// Settings types
-
 export interface ValorantCredentials {
   username: string;
   region: string;
-  has_credentials: boolean; // true if credentials are set
+  has_credentials: boolean; 
 }
 
 export interface ValorantCredentialsInput {
@@ -27,6 +25,7 @@ export interface Settings {
   discord_rich_presence_enabled: boolean;
   run_on_startup: boolean;
   close_to_tray: boolean;
+  auto_restore_enabled: boolean;
 }
 
 export interface UpdateSettingsParams {
@@ -44,4 +43,5 @@ export interface UpdateSettingsParams {
   discord_rich_presence_enabled?: boolean;
   run_on_startup?: boolean;
   close_to_tray?: boolean;
+  auto_restore_enabled?: boolean;
 }

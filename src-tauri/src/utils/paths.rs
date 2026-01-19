@@ -130,6 +130,14 @@ pub fn get_last_run_version_path() -> PathBuf {
     get_data_dir().join("last_run_version.txt")
 }
 
+pub fn get_gaming_profiles_json_path() -> PathBuf {
+    get_data_dir().join("gaming_profiles.json")
+}
+
+pub fn get_restore_list_json_path() -> PathBuf {
+    get_data_dir().join("restore_list.json")
+}
+
 pub fn initialize_data_directories() -> Result<(), String> {
     let directories = [
         get_data_dir(),

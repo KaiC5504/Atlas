@@ -6,6 +6,7 @@ mod launcher;
 mod models;
 mod performance;
 mod process_manager;
+mod task_monitor;
 mod utils;
 
 use commands::{
@@ -46,6 +47,12 @@ use commands::{
         upload_file_to_server,
     },
     settings::{get_settings, update_settings},
+    task_monitor::{
+        clear_restore_list, delete_gaming_profile, execute_gaming_profile, get_gaming_profiles,
+        get_kill_recommendations, get_process_list, get_restore_list, get_system_summary,
+        kill_by_category, kill_multiple_processes, kill_single_process, restore_processes_now,
+        save_gaming_profile, set_default_gaming_profile,
+    },
     updater::{check_for_update, download_update, get_current_version, install_update, DownloadedUpdateBytes},
     valorant::{check_valorant_store, get_store_history, get_valorant_store, should_auto_refresh_store},
 };
@@ -65,15 +72,14 @@ use tauri::{
 use utils::{
     get_audio_detection_jobs_json_path, get_bottleneck_thresholds_json_path, get_downloads_json_path,
     get_game_library_json_path, get_game_whitelist_json_path, get_gaming_sessions_json_path,
-    get_last_run_version_path, get_ml_jobs_json_path, get_quick_actions_json_path, get_server_config_json_path,
-    get_settings_json_path, get_valorant_store_json_path, initialize_data_directories,
+    get_last_run_version_path, get_ml_jobs_json_path, get_quick_actions_json_path,
+    get_server_config_json_path, get_settings_json_path, get_valorant_store_json_path,
+    initialize_data_directories,
 };
 
 fn initialize_app_data() -> Result<(), String> {
-    // Create directory structure
     initialize_data_directories()?;
 
-    // Initialize JSON files with defaults
     let empty_vec: Vec<serde_json::Value> = vec![];
 
     initialize_json_file(&get_downloads_json_path(), &empty_vec)?;
@@ -93,6 +99,9 @@ fn initialize_app_data() -> Result<(), String> {
 
     // Game launcher files
     initialize_json_file(&get_game_library_json_path(), &GameLibrary::new())?;
+
+    // Task monitor files - initialize gaming profiles
+    task_monitor::profiles::initialize_profiles()?;
 
     println!("App data initialized successfully");
     Ok(())
@@ -119,13 +128,22 @@ pub fn run() {
             Some(vec!["--autostart"]),
         ))
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
-            // Another instance tried to launch - show and focus the existing window
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.show();
                 let _ = window.unminimize();
                 let _ = window.set_focus();
             }
         }))
+        .plugin({
+            #[cfg(debug_assertions)]
+            {
+                tauri_plugin_mcp_bridge::init()
+            }
+            #[cfg(not(debug_assertions))]
+            {
+                tauri::plugin::Builder::new("mcp-bridge-noop").build()
+            }
+        })
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
                 if window.label() == "main" {
@@ -211,12 +229,10 @@ pub fn run() {
                 })
                 .build(app)?;
 
-            // Check if launched via autostart (--autostart flag)
             let args: Vec<String> = std::env::args().collect();
             let is_autostart_launch = args.iter().any(|arg| arg == "--autostart");
 
             if is_autostart_launch && settings.run_on_startup {
-                // Don't show window on autostart - tray only
                 if let Some(window) = app.get_webview_window("main") {
                     let _ = window.hide();
                 }
@@ -336,6 +352,22 @@ pub fn run() {
             download_playlist,
             upload_to_server,
             restart_discord_bot,
+            // Task monitor commands
+            get_process_list,
+            get_system_summary,
+            kill_single_process,
+            kill_multiple_processes,
+            kill_by_category,
+            get_gaming_profiles,
+            save_gaming_profile,
+            delete_gaming_profile,
+            set_default_gaming_profile,
+            execute_gaming_profile,
+            get_kill_recommendations,
+            // Task monitor restore commands
+            get_restore_list,
+            clear_restore_list,
+            restore_processes_now,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

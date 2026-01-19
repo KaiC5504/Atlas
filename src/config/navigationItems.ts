@@ -10,6 +10,7 @@ import {
   Library,
   Settings,
   Music2,
+  ListTodo,
 } from 'lucide-react';
 
 export type NavigationItemId =
@@ -22,6 +23,7 @@ export type NavigationItemId =
   | 'gaming'
   | 'library'
   | 'playlist-uploader'
+  | 'tasks'
   | 'settings';
 
 export interface NavigationItemConfig {
@@ -96,6 +98,13 @@ export const NAVIGATION_ITEMS: Record<NavigationItemId, NavigationItemConfig> = 
     icon: Music2,
     isDeveloperOnly: true,
   },
+  tasks: {
+    id: 'tasks',
+    label: 'Tasks',
+    to: '/tasks',
+    icon: ListTodo,
+    isDeveloperOnly: false,
+  },
   settings: {
     id: 'settings',
     label: 'Settings',
@@ -108,6 +117,7 @@ export const NAVIGATION_ITEMS: Record<NavigationItemId, NavigationItemConfig> = 
 export const DEFAULT_ORDER: NavigationItemId[] = [
   'library',
   'gaming',
+  'tasks',
   'performance',
   'valorant',
   'settings',
@@ -121,6 +131,7 @@ export const DEFAULT_DEVELOPER_ORDER: NavigationItemId[] = [
   'playlist-uploader',
   'library',
   'gaming',
+  'tasks',
   'performance',
   'valorant',
   'settings',
