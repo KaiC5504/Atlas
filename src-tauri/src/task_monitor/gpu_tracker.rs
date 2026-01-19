@@ -38,6 +38,7 @@ impl GpuProcessTracker {
         }
     }
 
+    #[allow(dead_code)]
     pub fn is_available(&self) -> bool {
         self.nvml.is_some()
     }
@@ -95,6 +96,7 @@ impl GpuProcessTracker {
         }
     }
 
+    #[allow(dead_code)]
     pub fn get_process_gpu_usage(&self, pid: u32) -> Option<f32> {
         {
             let cache = self.cache.read().ok()?;

@@ -29,6 +29,7 @@ pub enum ProcessCategory {
 }
 
 impl ProcessCategory {
+    #[allow(dead_code)]
     pub fn display_name(&self) -> &'static str {
         match self {
             ProcessCategory::AntiCheatProtected => "Protected",

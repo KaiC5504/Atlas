@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::sync::OnceLock;
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct ProcessDescription {
     pub friendly_name: &'static str,
     pub description: &'static str,
@@ -1474,6 +1475,7 @@ pub fn get_friendly_name(name: &str) -> String {
 }
 
 /// Get full description info for a process
+#[allow(dead_code)]
 pub fn get_full_description(name: &str) -> Option<&'static ProcessDescription> {
     let name_lower = name.to_lowercase();
     let descriptions = get_descriptions();

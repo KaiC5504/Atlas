@@ -275,6 +275,7 @@ pub fn start_game_detection(
                 if strategy == DetectionStrategy::HandleWait {
                     println!("Phase 2: Using process handle wait for instant exit detection (PID: {})", pid);
 
+                    loop {
                         let result = unsafe { WaitForSingleObject(handle, 100) };
 
                         let wait_result = match result {

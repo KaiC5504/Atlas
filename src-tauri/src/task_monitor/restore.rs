@@ -70,6 +70,7 @@ pub fn add_to_restore_list(process: KilledProcessInfo) -> Result<(), String> {
     save_restore_list(&list)
 }
 
+#[allow(dead_code)]
 pub fn mark_as_self_restoring(exe_path: &str) -> Result<(), String> {
     let mut list = load_restore_list()?;
 

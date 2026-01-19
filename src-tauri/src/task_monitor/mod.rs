@@ -9,7 +9,6 @@ pub mod system_tracker;
 use categorizer::can_kill_process;
 use models::{KillResult, ProcessCategory, ProcessInfo, SystemSummary};
 use restore::KilledProcessInfo;
-use sysinfo::{ProcessRefreshKind, RefreshKind, System};
 use system_tracker::SYSTEM_TRACKER;
 
 use crate::commands::settings::get_settings;

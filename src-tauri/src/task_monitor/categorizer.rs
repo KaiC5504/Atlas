@@ -37,7 +37,7 @@ pub fn categorize_process(name: &str, exe_path: Option<&str>) -> ProcessCategory
 
     ProcessCategory::Unknown
 }
-e
+
 fn is_anti_cheat(name: &str, path: Option<&str>) -> bool {
     let anti_cheat_names = [
         // Riot Vanguard

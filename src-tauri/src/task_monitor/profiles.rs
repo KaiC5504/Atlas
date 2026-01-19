@@ -75,6 +75,7 @@ pub fn set_default_profile(id: &str) -> Result<(), String> {
     write_json_file(&path, &list)
 }
 
+#[allow(dead_code)]
 pub fn get_default_profile() -> Result<Option<GamingProfile>, String> {
     let profiles = get_profiles()?;
     Ok(profiles.into_iter().find(|p| p.is_default))
