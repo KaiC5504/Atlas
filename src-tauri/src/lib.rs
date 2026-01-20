@@ -11,9 +11,10 @@ mod utils;
 
 use commands::{
     audio_detection::{
-        cancel_audio_detection_job, delete_audio_detection_job, get_audio_detection_job,
-        get_model_path, has_trained_model, list_audio_detection_jobs, start_audio_detection_job,
-        submit_audio_detection_job,
+        cancel_audio_detection_job, delete_audio_detection_job, delete_feedback_session,
+        extract_audio_segment, get_audio_detection_job, get_model_path, has_trained_model,
+        list_audio_detection_jobs, list_feedback_sessions, save_feedback_session,
+        start_audio_detection_job, start_model_training, submit_audio_detection_job,
     },
     auth::{capture_auth_cookies, close_auth_window, get_auth_status, get_stored_credentials, logout, open_auth_window},
     autostart::{disable_autostart, enable_autostart, is_autostart_enabled},
@@ -278,6 +279,12 @@ pub fn run() {
             get_audio_detection_job,
             has_trained_model,
             get_model_path,
+            // Enhance Model Mode commands
+            extract_audio_segment,
+            save_feedback_session,
+            list_feedback_sessions,
+            delete_feedback_session,
+            start_model_training,
             // Valorant commands
             get_valorant_store,
             check_valorant_store,

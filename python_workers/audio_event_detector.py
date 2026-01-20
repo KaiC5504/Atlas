@@ -274,12 +274,11 @@ class AudioEventDetector(WorkerBase):
         window_samples = int(config.window_size_ms * sr / 1000)
         hop_samples = int(config.hop_size_ms * sr / 1000)
 
-        # Feature extraction parameters
         n_mels = 128
         n_fft = 2048
         hop_length = 512
+        model_time_frames = 32
 
-        # Check if using GPU for batch processing
         using_gpu = 'CUDAExecutionProvider' in model.get_providers()
         batch_size = 32 if using_gpu else 8
 
@@ -292,27 +291,21 @@ class AudioEventDetector(WorkerBase):
         )
         full_mel_spec_db = librosa.power_to_db(full_mel_spec, ref=np.max)
 
-        # Calculate frame indices for each window
-        # Each audio sample window corresponds to a range of spectrogram frames
-        frames_per_window = int(window_samples / hop_length)
+        frames_per_window = model_time_frames
         frames_per_hop = int(hop_samples / hop_length)
 
         predictions = []
         total_windows = max(1, (full_mel_spec_db.shape[1] - frames_per_window) // frames_per_hop + 1)
 
-        # Prepare window frame indices
         window_frame_starts = list(range(0, full_mel_spec_db.shape[1] - frames_per_window + 1, frames_per_hop))
 
         for batch_idx in range(0, len(window_frame_starts), batch_size):
             batch_frame_starts = window_frame_starts[batch_idx:batch_idx + batch_size]
             batch_features = []
 
-            # Slice windows from pre-computed spectrogram (fast!)
             for frame_start in batch_frame_starts:
-                # Slice the spectrogram window
                 mel_window = full_mel_spec_db[:, frame_start:frame_start + frames_per_window]
 
-                # Pad if needed (edge case at end)
                 if mel_window.shape[1] < frames_per_window:
                     mel_window = np.pad(mel_window, ((0, 0), (0, frames_per_window - mel_window.shape[1])))
 
@@ -321,15 +314,16 @@ class AudioEventDetector(WorkerBase):
 
             batch_input = np.array(batch_features)[:, np.newaxis, :, :].astype(np.float32)
 
-            # Run batch inference
             outputs = model.run(None, {'mel_spectrogram': batch_input})
-            batch_probs = outputs[0][:, 0]  
+            batch_probs = outputs[0][:, 0]
+
+            if batch_idx < 3:
+                write_log(f"Batch {batch_idx} probs - min: {batch_probs.min():.4f}, max: {batch_probs.max():.4f}, mean: {batch_probs.mean():.4f}", "info")
 
             for i, (frame_start, prob) in enumerate(zip(batch_frame_starts, batch_probs)):
                 window_start_sec = (frame_start * hop_length) / sr
                 predictions.append((window_start_sec, float(prob)))
 
-            # Emit progress
             progress = batch_idx + len(batch_frame_starts)
             update_frequency = batch_size
             if progress % update_frequency == 0 or progress >= total_windows:
@@ -348,8 +342,10 @@ class AudioEventDetector(WorkerBase):
         merge_gap = config.merge_gap_ms / 1000
         window_duration = config.window_size_ms / 1000
 
-        # Step 1: Filter by threshold
+        #Filter by threshold
         positive_windows = [(t, p) for t, p in predictions if p >= threshold]
+
+        write_log(f"Postprocessing: {len(positive_windows)}/{len(predictions)} windows above threshold {threshold}", "info")
 
         if not positive_windows:
             return []
@@ -386,6 +382,7 @@ class AudioEventDetector(WorkerBase):
                     label='target_audio'
                 ))
 
+        write_log(f"Postprocessing complete: {len(result)} segments after merging and filtering", "info")
         return result
 
 

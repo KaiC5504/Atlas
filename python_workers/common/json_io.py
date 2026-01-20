@@ -38,7 +38,9 @@ def write_output(data: Dict[str, Any]) -> None:
         "type": "result",
         "data": data
     }
-    print(json.dumps(output, ensure_ascii=False), flush=True)
+    json_str = json.dumps(output, ensure_ascii=False)
+    write_log(f"Result JSON size: {len(json_str)} bytes")
+    print(json_str, flush=True)
 
 
 def write_progress(percent: int, stage: str = "") -> None:

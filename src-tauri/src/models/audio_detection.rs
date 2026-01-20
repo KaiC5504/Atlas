@@ -92,9 +92,88 @@ pub struct TrainingSample {
 
 /// Training data manifest
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[allow(dead_code)] 
+#[allow(dead_code)]
 pub struct TrainingManifest {
     pub positive_samples: Vec<TrainingSample>,
     pub negative_samples: Vec<TrainingSample>,
     pub hard_negative_samples: Vec<TrainingSample>,
+}
+
+// ============================================================================
+// Enhance Model Mode Types
+// ============================================================================
+
+/// A single feedback sample from user labeling
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FeedbackSample {
+    pub id: String,
+    pub source_file: String,
+    pub start_seconds: f64,
+    pub end_seconds: f64,
+    pub original_confidence: f64,
+    pub user_label: String, // "correct" or "wrong"
+    pub is_manual: bool,
+    pub created_at: String,
+}
+
+/// A manually-marked segment (false negative)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ManualSegment {
+    pub id: String,
+    pub start_seconds: f64,
+    pub end_seconds: f64,
+    pub created_at: String,
+}
+
+/// A feedback session containing all corrections for a detection job
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FeedbackSession {
+    pub id: String,
+    pub source_file: String,
+    pub job_id: String,
+    pub model_version: String,
+    pub samples: Vec<FeedbackSample>,
+    pub manual_positives: Vec<ManualSegment>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+/// UI-facing training configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UITrainingConfig {
+    pub epochs: u32,
+    pub learning_rate: f64,
+    #[serde(default)]
+    pub bulk_positive_files: Vec<String>,
+    #[serde(default = "default_fine_tune")]
+    pub fine_tune: bool,
+    #[serde(default = "default_freeze_layers")]
+    pub freeze_layers: bool,
+    #[serde(default = "default_unfreeze_after")]
+    pub unfreeze_after: u32,
+}
+
+fn default_fine_tune() -> bool {
+    true
+}
+
+fn default_freeze_layers() -> bool {
+    true
+}
+
+fn default_unfreeze_after() -> u32 {
+    5
+}
+
+impl Default for UITrainingConfig {
+    fn default() -> Self {
+        Self {
+            epochs: 15,           // Reduced from 30 for fine-tuning
+            learning_rate: 0.0001, // Reduced from 0.001 for fine-tuning
+            bulk_positive_files: vec![],
+            fine_tune: true,
+            freeze_layers: true,
+            unfreeze_after: 5,
+        }
+    }
 }

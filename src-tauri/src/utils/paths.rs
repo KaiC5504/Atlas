@@ -138,6 +138,14 @@ pub fn get_restore_list_json_path() -> PathBuf {
     get_data_dir().join("restore_list.json")
 }
 
+pub fn get_feedback_sessions_json_path() -> PathBuf {
+    get_data_dir().join("feedback_sessions.json")
+}
+
+pub fn get_feedback_audio_cache_dir() -> PathBuf {
+    get_data_dir().join("feedback_audio_cache")
+}
+
 pub fn initialize_data_directories() -> Result<(), String> {
     let directories = [
         get_data_dir(),

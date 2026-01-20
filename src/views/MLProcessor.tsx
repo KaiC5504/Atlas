@@ -21,7 +21,9 @@ import {
   Sliders,
   Timer,
   Target,
+  Sparkles,
 } from 'lucide-react';
+import { EnhanceModelPanel } from '../components/ml';
 
 // Status badge component
 function StatusBadge({ status }: { status: string }) {
@@ -69,6 +71,9 @@ export function MLProcessor() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [hasModel, setHasModel] = useState(false);
+
+  // Mode state
+  const [mode, setMode] = useState<'inference' | 'enhance'>('inference');
 
   // Form state
   const [inputFile, setInputFile] = useState('');
@@ -232,44 +237,72 @@ export function MLProcessor() {
             <p className="text-sm text-text-muted">ML-powered audio event detection</p>
           </div>
         </div>
-        <button
-          onClick={fetchJobs}
-          disabled={loading}
-          className="btn btn-secondary btn-sm"
-        >
-          <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-          Refresh
-        </button>
-      </div>
-
-      {/* Model Status */}
-      <div className={`card mb-6 ${hasModel ? 'border-green-500/30' : 'border-amber-500/30'}`}>
-        <div className="flex items-center gap-3">
-          {hasModel ? (
-            <>
-              <div className="p-2 rounded-lg bg-green-500/20">
-                <CheckCircle className="w-5 h-5 text-green-400" />
-              </div>
-              <div>
-                <h3 className="font-medium text-white">Model Ready</h3>
-                <p className="text-sm text-text-muted">Audio event detection model is available</p>
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="p-2 rounded-lg bg-amber-500/20">
-                <AlertCircle className="w-5 h-5 text-amber-400" />
-              </div>
-              <div>
-                <h3 className="font-medium text-white">No Model Found</h3>
-                <p className="text-sm text-text-muted">
-                  Train or import a model to: %APPDATA%/Atlas/models/audio_event_detector.onnx
-                </p>
-              </div>
-            </>
-          )}
+        <div className="flex items-center gap-2">
+          {/* Mode Toggle */}
+          <button
+            onClick={() => setMode(mode === 'inference' ? 'enhance' : 'inference')}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors ${
+              mode === 'enhance'
+                ? 'bg-purple-500/20 border border-purple-500/30 text-purple-400'
+                : 'glass-subtle hover:bg-white/10'
+            }`}
+          >
+            {mode === 'inference' ? (
+              <>
+                <BrainCircuit size={16} />
+                <span className="text-sm">Inference</span>
+              </>
+            ) : (
+              <>
+                <Sparkles size={16} className="text-purple-400" />
+                <span className="text-sm text-purple-400">Enhance</span>
+              </>
+            )}
+          </button>
+          <button
+            onClick={fetchJobs}
+            disabled={loading}
+            className="btn btn-secondary btn-sm"
+          >
+            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+            Refresh
+          </button>
         </div>
       </div>
+
+      {/* Enhance Mode Panel */}
+      {mode === 'enhance' ? (
+        <EnhanceModelPanel jobs={jobs} onRefresh={fetchJobs} />
+      ) : (
+        <>
+          {/* Model Status */}
+          <div className={`card mb-6 ${hasModel ? 'border-green-500/30' : 'border-amber-500/30'}`}>
+            <div className="flex items-center gap-3">
+              {hasModel ? (
+                <>
+                  <div className="p-2 rounded-lg bg-green-500/20">
+                    <CheckCircle className="w-5 h-5 text-green-400" />
+                  </div>
+                  <div>
+                    <h3 className="font-medium text-white">Model Ready</h3>
+                    <p className="text-sm text-text-muted">Audio event detection model is available</p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="p-2 rounded-lg bg-amber-500/20">
+                    <AlertCircle className="w-5 h-5 text-amber-400" />
+                  </div>
+                  <div>
+                    <h3 className="font-medium text-white">No Model Found</h3>
+                    <p className="text-sm text-text-muted">
+                      Train or import a model to: %APPDATA%/Atlas/models/audio_event_detector.onnx
+                    </p>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
 
       {/* Submit Job Form */}
       <div className="card mb-6">
@@ -545,6 +578,8 @@ export function MLProcessor() {
           </div>
         )}
       </div>
+        </>
+      )}
     </div>
   );
 }

@@ -8,7 +8,7 @@ import argparse
 import platform
 import numpy as np
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple, Optional, Any
 import sys
 from datetime import datetime
 
@@ -79,6 +79,20 @@ class AudioDataset(Dataset):
         # Load spectrogram
         spec = np.load(file_path)
 
+        # Ensure consistent dimensions - model expects (128, 32)
+        target_frames = 32
+        if spec.shape[1] > target_frames:
+            # Trim to target size (take center portion)
+            start = (spec.shape[1] - target_frames) // 2
+            spec = spec[:, start:start + target_frames]
+        elif spec.shape[1] < target_frames:
+            # Pad to target size
+            pad_width = target_frames - spec.shape[1]
+            spec = np.pad(spec, ((0, 0), (0, pad_width)), mode='constant')
+
+        # Normalize to zero mean, unit variance (must match inference preprocessing)
+        spec = (spec - spec.mean()) / (spec.std() + 1e-8)
+
         # Apply augmentation if training
         if self.augment and self.split == 'train':
             spec = self._apply_augmentation(spec)
@@ -106,6 +120,76 @@ class AudioDataset(Dataset):
             spec = apply_gain_augmentation(spec, self.config.gain_range)
 
         return spec
+
+
+def freeze_early_layers(model: nn.Module, num_blocks: int = 2) -> int:
+    """
+    Freeze early convolutional blocks to prevent forgetting learned features.
+
+    Args:
+        model: The CNN model to freeze layers in
+        num_blocks: Number of conv blocks to freeze (default 2)
+
+    Returns:
+        Number of frozen parameters
+    """
+    frozen_count = 0
+
+    # Freeze conv blocks by name pattern
+    for name, param in model.named_parameters():
+        # Freeze conv1, bn1, conv2, bn2 (first 2 blocks)
+        should_freeze = False
+        for i in range(1, num_blocks + 1):
+            if f'conv{i}' in name or f'bn{i}' in name:
+                should_freeze = True
+                break
+
+        if should_freeze:
+            param.requires_grad = False
+            frozen_count += param.numel()
+
+    return frozen_count
+
+
+def unfreeze_all_layers(model: nn.Module) -> None:
+    """Unfreeze all layers for gradual fine-tuning."""
+    for param in model.parameters():
+        param.requires_grad = True
+
+
+def load_pretrained_weights(model: nn.Module, checkpoint_path: str, device: torch.device) -> bool:
+    """
+    Load pretrained weights from a PyTorch checkpoint.
+
+    Args:
+        model: The model to load weights into
+        checkpoint_path: Path to .pt checkpoint file
+        device: Device to load weights to
+
+    Returns:
+        True if weights were loaded successfully, False otherwise
+    """
+    try:
+        checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
+
+        # Handle different checkpoint formats
+        if isinstance(checkpoint, dict):
+            if 'model_state_dict' in checkpoint:
+                state_dict = checkpoint['model_state_dict']
+            elif 'state_dict' in checkpoint:
+                state_dict = checkpoint['state_dict']
+            else:
+                state_dict = checkpoint
+        else:
+            state_dict = checkpoint
+
+        # Load state dict with strict=False to handle minor architecture differences
+        model.load_state_dict(state_dict, strict=False)
+        return True
+
+    except Exception as e:
+        print(f"Warning: Could not load pretrained weights: {e}")
+        return False
 
 
 class EarlyStopping:
@@ -418,6 +502,232 @@ def train_model(config_path: str) -> str:
     print(f"Best validation F1: {best_f1:.4f}")
 
     return str(best_model_path)
+
+
+def train_model_with_progress(
+    data_dir: str,
+    output_path: str,
+    progress_callback=None,
+    config_overrides: Dict = None,
+    fine_tuning: Dict = None
+) -> Dict[str, Any]:
+    """
+    Train model with progress callback for UI integration.
+
+    Args:
+        data_dir: Path to prepared dataset (with train/positive, train/negative dirs)
+        output_path: Path for output ONNX model
+        progress_callback: Callable(epoch, total_epochs, metrics) for progress updates
+        config_overrides: Optional config overrides (epochs, learning_rate, etc.)
+        fine_tuning: Optional fine-tuning config:
+            - pretrained_path: Path to existing .pt checkpoint
+            - freeze_layers: Whether to freeze early layers (default True)
+            - unfreeze_after: Epoch to unfreeze all layers (default 5)
+
+    Returns:
+        Dict with training results and metrics
+    """
+    # Use default config with overrides
+    config_dict = {
+        'data_dir': data_dir,
+        'batch_size': 64,
+        'learning_rate': 0.001,
+        'weight_decay': 0.01,
+        'epochs': 30,  # Default for fine-tuning
+        'early_stopping_patience': 5,
+        'augmentation': {
+            'time_mask_max_width': 5,
+            'freq_mask_max_width': 10,
+            'gain_range': [-3, 3],
+            'mixup_alpha': 0.2,
+        },
+        'class_weights': {'positive': 1.0, 'negative': 1.0},
+        'output_dir': str(Path(output_path).parent),
+        'export_onnx': True,
+        'model': {'architecture': 'cnn_v1'},
+    }
+
+    # Apply user overrides
+    if config_overrides:
+        for key, value in config_overrides.items():
+            if key in config_dict:
+                config_dict[key] = value
+
+    config = TrainingConfig.from_dict(config_dict)
+
+    # Setup device
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print(f"Training with device: {device}")
+
+    # Enable mixed precision training for RTX GPUs
+    use_amp = device.type == 'cuda'
+    scaler = torch.amp.GradScaler('cuda') if use_amp else None
+
+    # Create datasets
+    train_dataset = AudioDataset(data_dir, split='train', augment=True, config=config)
+    val_dataset = AudioDataset(data_dir, split='val', augment=False, config=config)
+
+    # Use 80/20 split if no val folder or empty val
+    if len(val_dataset) == 0 and len(train_dataset) > 0:
+        train_size = int(0.8 * len(train_dataset))
+        val_size = len(train_dataset) - train_size
+        if val_size > 0:
+            train_dataset, val_dataset = torch.utils.data.random_split(
+                train_dataset, [train_size, val_size]
+            )
+        else:
+            # Very small dataset - use same data for train and val
+            val_dataset = train_dataset
+
+    if len(train_dataset) == 0:
+        raise ValueError("No training samples found in dataset")
+
+    num_workers = 4 if device.type == 'cuda' else 0
+    train_loader = DataLoader(
+        train_dataset, batch_size=config.batch_size, shuffle=True,
+        num_workers=num_workers, pin_memory=True if device.type == 'cuda' else False
+    )
+    val_loader = DataLoader(
+        val_dataset, batch_size=config.batch_size * 2, shuffle=False,
+        num_workers=num_workers, pin_memory=True if device.type == 'cuda' else False
+    )
+
+    # Create model
+    model = create_model('cnn_v1').to(device)
+
+    # Handle fine-tuning: load pretrained weights and optionally freeze layers
+    is_fine_tuning = False
+    freeze_layers = False
+    unfreeze_after_epoch = 5
+
+    if fine_tuning:
+        pretrained_path = fine_tuning.get('pretrained_path')
+        freeze_layers = fine_tuning.get('freeze_layers', True)
+        unfreeze_after_epoch = fine_tuning.get('unfreeze_after', 5)
+
+        if pretrained_path and Path(pretrained_path).exists():
+            print(f"\n*** FINE-TUNING MODE ***")
+            print(f"Loading pretrained weights from: {pretrained_path}")
+
+            if load_pretrained_weights(model, pretrained_path, device):
+                is_fine_tuning = True
+                print(f"Successfully loaded pretrained weights")
+
+                if freeze_layers:
+                    frozen_count = freeze_early_layers(model, num_blocks=2)
+                    trainable_count = sum(p.numel() for p in model.parameters() if p.requires_grad)
+                    total_count = sum(p.numel() for p in model.parameters())
+                    print(f"Frozen {frozen_count:,} parameters ({frozen_count/total_count*100:.1f}%)")
+                    print(f"Trainable: {trainable_count:,} parameters")
+                    print(f"Will unfreeze all layers after epoch {unfreeze_after_epoch}")
+            else:
+                print("Could not load pretrained weights, training from scratch")
+        else:
+            print("No pretrained model found, training from scratch")
+    else:
+        print("Training from scratch (no fine-tuning config provided)")
+
+    # Calculate class weights to handle imbalance
+    # Count positive and negative samples
+    if hasattr(train_dataset, 'samples'):
+        # Direct AudioDataset
+        num_pos = sum(1 for _, label in train_dataset.samples if label == 1)
+        num_neg = len(train_dataset.samples) - num_pos
+    else:
+        # Subset from random_split - count from underlying dataset
+        underlying = train_dataset.dataset if hasattr(train_dataset, 'dataset') else train_dataset
+        if hasattr(underlying, 'samples'):
+            num_pos = sum(1 for _, label in underlying.samples if label == 1)
+            num_neg = len(underlying.samples) - num_pos
+        else:
+            num_pos, num_neg = 1, 1  # Fallback to no weighting
+
+    # Weight positive class higher when there are more negatives
+    # Cap at 3.0 to balance up to 1:3 ratio without over-correction
+    pos_weight_value = min(num_neg / max(num_pos, 1), 3.0)
+    pos_weight = torch.tensor([pos_weight_value]).to(device)
+    print(f"Class weighting: pos_weight={pos_weight_value:.2f} (positives={num_pos}, negatives={num_neg})")
+
+    # Loss and optimizer
+    criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+    optimizer = optim.AdamW(
+        filter(lambda p: p.requires_grad, model.parameters()),  # Only optimize trainable params
+        lr=config.learning_rate,
+        weight_decay=config.weight_decay
+    )
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=config.epochs)
+
+    # Training loop
+    best_f1 = 0
+    best_metrics = None
+    output_dir = Path(output_path).parent
+    output_dir.mkdir(parents=True, exist_ok=True)
+    best_model_path = output_dir / 'best_model.pt'
+    layers_unfrozen = False
+
+    for epoch in range(config.epochs):
+        # Gradual unfreezing: unfreeze all layers after specified epoch
+        if is_fine_tuning and freeze_layers and not layers_unfrozen and epoch >= unfreeze_after_epoch:
+            print(f"\n*** Unfreezing all layers at epoch {epoch + 1} ***")
+            unfreeze_all_layers(model)
+            layers_unfrozen = True
+
+            # Recreate optimizer with all parameters and lower learning rate
+            optimizer = optim.AdamW(
+                model.parameters(),
+                lr=config.learning_rate * 0.1,  # Lower LR for unfrozen layers
+                weight_decay=config.weight_decay
+            )
+            # Reset scheduler with remaining epochs
+            remaining_epochs = config.epochs - epoch
+            scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=remaining_epochs)
+            print(f"Learning rate reduced to {config.learning_rate * 0.1} for fine-tuning all layers")
+
+        train_metrics = train_epoch(model, train_loader, criterion, optimizer, device, scaler, use_amp)
+        val_metrics = evaluate(model, val_loader, criterion, device, use_amp)
+        scheduler.step()
+
+        # Call progress callback
+        if progress_callback:
+            progress_callback(epoch + 1, config.epochs, val_metrics)
+
+        # Save best model
+        if val_metrics['f1'] > best_f1:
+            best_f1 = val_metrics['f1']
+            best_metrics = val_metrics
+            torch.save({
+                'epoch': epoch,
+                'model_state_dict': model.state_dict(),
+                'val_metrics': val_metrics,
+            }, best_model_path)
+
+    # Export to ONNX
+    if best_model_path.exists():
+        checkpoint = torch.load(best_model_path, weights_only=False)
+        model.load_state_dict(checkpoint['model_state_dict'])
+        model.eval()
+        export_to_onnx(model, output_path)
+
+    # Print final training summary
+    print("\n" + "=" * 50)
+    print("TRAINING COMPLETE" + (" (Fine-tuned)" if is_fine_tuning else " (From scratch)"))
+    print("=" * 50)
+    if best_metrics:
+        print(f"  F1 Score:    {best_metrics.get('f1', 0):.4f}")
+        print(f"  Accuracy:    {best_metrics.get('accuracy', 0):.4f}")
+        print(f"  Precision:   {best_metrics.get('precision', 0):.4f}")
+        print(f"  Recall:      {best_metrics.get('recall', 0):.4f}")
+        print(f"  AUC:         {best_metrics.get('auc', 0):.4f}")
+    print(f"  Model saved: {output_path}")
+    if is_fine_tuning:
+        print(f"  Mode: Fine-tuning with {'layer freezing' if freeze_layers else 'all layers trainable'}")
+    print("=" * 50 + "\n")
+
+    return {
+        'metrics': best_metrics,
+        'model_path': str(output_path),
+        'fine_tuned': is_fine_tuning,
+    }
 
 
 def main():

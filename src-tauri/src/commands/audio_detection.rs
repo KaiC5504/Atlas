@@ -2,10 +2,15 @@
 // Integrates the audio_event_detector.py Python worker
 
 use crate::file_manager::{read_json_file, write_json_file};
-use crate::models::{AudioDetectionJob, AudioDetectionResult, AudioDetectionStatus, ModelConfig};
+use crate::models::{
+    AudioDetectionJob, AudioDetectionResult, AudioDetectionStatus, FeedbackSession, ModelConfig,
+    UITrainingConfig,
+};
 use crate::process_manager::{spawn_python_worker_async, WorkerMessage};
-use crate::utils::{get_audio_detection_jobs_json_path, get_models_dir};
+use crate::utils::{get_audio_detection_jobs_json_path, get_feedback_sessions_json_path, get_models_dir};
+use base64::{engine::general_purpose::STANDARD, Engine};
 use std::path::Path;
+use std::process::Command;
 use tauri::{AppHandle, Emitter};
 use tokio::sync::mpsc;
 
@@ -312,5 +317,220 @@ fn get_audio_event_model_path() -> Result<String, String> {
         Ok(model_path.to_string_lossy().to_string())
     } else {
         Err("Model not found. Please train or import a model first.".to_string())
+    }
+}
+
+// ============================================================================
+// Enhance Model Mode Commands
+// ============================================================================
+
+/// Extract an audio segment and return as base64-encoded WAV
+#[tauri::command]
+pub async fn extract_audio_segment(
+    source_file: String,
+    start_seconds: f64,
+    end_seconds: f64,
+) -> Result<String, String> {
+    // Validate source file exists
+    if !Path::new(&source_file).exists() {
+        return Err(format!("Source file not found: {}", source_file));
+    }
+
+    // Create temp output path
+    let temp_dir = std::env::temp_dir();
+    let output_path = temp_dir.join(format!("atlas_segment_{}.wav", uuid::Uuid::new_v4()));
+
+    // Use ffmpeg to extract segment
+    let duration = end_seconds - start_seconds;
+    let output = Command::new("ffmpeg")
+        .args([
+            "-y",
+            "-ss",
+            &start_seconds.to_string(),
+            "-t",
+            &duration.to_string(),
+            "-i",
+            &source_file,
+            "-acodec",
+            "pcm_s16le",
+            "-ar",
+            "44100",
+            "-ac",
+            "2",
+            output_path.to_str().unwrap(),
+        ])
+        .output()
+        .map_err(|e| {
+            format!(
+                "Failed to run ffmpeg: {}. Please ensure FFmpeg is installed and in your PATH.",
+                e
+            )
+        })?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("FFmpeg failed to extract audio segment: {}", stderr));
+    }
+
+    // Read and encode as base64
+    let wav_bytes = std::fs::read(&output_path)
+        .map_err(|e| format!("Failed to read extracted WAV file: {}", e))?;
+
+    // Cleanup temp file
+    let _ = std::fs::remove_file(&output_path);
+
+    Ok(STANDARD.encode(&wav_bytes))
+}
+
+/// Save a feedback session
+#[tauri::command]
+pub fn save_feedback_session(session: FeedbackSession) -> Result<(), String> {
+    let path = get_feedback_sessions_json_path();
+    let mut sessions: Vec<FeedbackSession> = if path.exists() {
+        read_json_file(&path)?
+    } else {
+        vec![]
+    };
+
+    // Update existing or add new
+    if let Some(existing) = sessions.iter_mut().find(|s| s.id == session.id) {
+        *existing = session;
+    } else {
+        sessions.push(session);
+    }
+
+    write_json_file(&path, &sessions)
+}
+
+/// List all feedback sessions
+#[tauri::command]
+pub fn list_feedback_sessions() -> Result<Vec<FeedbackSession>, String> {
+    let path = get_feedback_sessions_json_path();
+    if !path.exists() {
+        return Ok(vec![]);
+    }
+    read_json_file(&path)
+}
+
+/// Delete a feedback session
+#[tauri::command]
+pub fn delete_feedback_session(session_id: String) -> Result<(), String> {
+    let path = get_feedback_sessions_json_path();
+    if !path.exists() {
+        return Err("No feedback sessions found".to_string());
+    }
+    let mut sessions: Vec<FeedbackSession> = read_json_file(&path)?;
+    sessions.retain(|s| s.id != session_id);
+    write_json_file(&path, &sessions)
+}
+
+/// Start model training with feedback data and custom config
+#[tauri::command]
+pub async fn start_model_training(
+    app: AppHandle,
+    session_ids: Vec<String>,
+    config: UITrainingConfig,
+) -> Result<serde_json::Value, String> {
+    // Load selected feedback sessions
+    let sessions_path = get_feedback_sessions_json_path();
+    let all_sessions: Vec<FeedbackSession> = if sessions_path.exists() {
+        read_json_file(&sessions_path)?
+    } else {
+        return Err("No feedback sessions found".to_string());
+    };
+
+    let selected: Vec<&FeedbackSession> = all_sessions
+        .iter()
+        .filter(|s| session_ids.contains(&s.id))
+        .collect();
+
+    if selected.is_empty() {
+        return Err("No feedback sessions selected".to_string());
+    }
+
+    // Count total samples for validation
+    let total_samples: usize = selected
+        .iter()
+        .map(|s| s.samples.len() + s.manual_positives.len())
+        .sum();
+
+    let has_bulk = !config.bulk_positive_files.is_empty();
+
+    if total_samples < 2 && !has_bulk {
+        return Err("Need at least 2 feedback samples or bulk positive files to train".to_string());
+    }
+
+    // Prepare worker input
+    let worker_input = serde_json::json!({
+        "feedback_sessions": selected,
+        "bulk_positive_files": config.bulk_positive_files,
+        "model_output_path": get_models_dir().join("audio_event_detector.onnx").to_string_lossy(),
+        "original_model_path": get_models_dir().join("audio_event_detector.onnx").to_string_lossy(),
+        "config": {
+            "epochs": config.epochs,
+            "learning_rate": config.learning_rate,
+            "fine_tune": config.fine_tune,
+            "freeze_layers": config.freeze_layers,
+            "unfreeze_after": config.unfreeze_after,
+        }
+    });
+
+    // Create progress channel
+    let (tx, mut rx) = mpsc::channel::<WorkerMessage>(100);
+    let progress_app = app.clone();
+
+    // Spawn progress handler
+    tokio::spawn(async move {
+        while let Some(message) = rx.recv().await {
+            match message {
+                WorkerMessage::Progress { percent, stage } => {
+                    let _ = progress_app.emit(
+                        "model-training-progress",
+                        serde_json::json!({
+                            "percent": percent,
+                            "stage": stage,
+                        }),
+                    );
+                }
+                WorkerMessage::Log { level, message } => {
+                    println!("[Training {}] {}", level, message);
+                    // Parse metrics from log messages if present
+                    if message.contains("F1:") || message.contains("Accuracy:") {
+                        let _ = progress_app.emit(
+                            "model-training-metrics",
+                            serde_json::json!({
+                                "raw": message,
+                            }),
+                        );
+                    }
+                }
+                _ => {}
+            }
+        }
+    });
+
+    // Spawn Python worker
+    let result = spawn_python_worker_async("model_enhancer.py", worker_input, Some(tx)).await;
+
+    match result {
+        Ok(data) => {
+            let _ = app.emit(
+                "model-training-complete",
+                serde_json::json!({
+                    "success": true,
+                    "data": data,
+                }),
+            );
+            Ok(data)
+        }
+        Err(error) => {
+            let _ = app.emit(
+                "model-training-error",
+                serde_json::json!({
+                    "error": error,
+                }),
+            );
+            Err(error)
+        }
     }
 }

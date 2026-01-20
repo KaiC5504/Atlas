@@ -212,11 +212,14 @@ def export_to_onnx(
         input_shape: Input tensor shape (batch, channels, n_mels, time_frames)
         opset_version: ONNX opset version
     """
+    # Move model to CPU for ONNX export (ONNX is device-agnostic)
+    model_cpu = model.cpu()
+
     # Wrap model to include sigmoid for inference
-    model_with_sigmoid = ModelWithSigmoid(model)
+    model_with_sigmoid = ModelWithSigmoid(model_cpu)
     model_with_sigmoid.eval()
 
-    # Create dummy input
+    # Create dummy input on CPU
     dummy_input = torch.randn(*input_shape)
 
     # Export to ONNX

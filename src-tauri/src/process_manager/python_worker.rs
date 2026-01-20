@@ -60,29 +60,46 @@ pub fn get_python_path() -> String {
     "python".to_string()
 }
 
+/// Check if a python_workers directory is valid (contains common module)
+fn is_valid_workers_dir(dir: &std::path::Path) -> bool {
+    // Check for the common module which all workers need
+    dir.join("common").exists() && dir.join("common").join("__init__.py").exists()
+}
+
 /// Get the path to the python_workers directory
 pub fn get_workers_dir() -> std::path::PathBuf {
     if let Ok(exe_path) = std::env::current_exe() {
+        println!("Executable path: {:?}", exe_path);
+
         if let Some(exe_dir) = exe_path.parent() {
+            // Check next to exe (production builds)
             let workers_dir = exe_dir.join("python_workers");
-            if workers_dir.exists() {
+            if workers_dir.exists() && is_valid_workers_dir(&workers_dir) {
+                println!("Found python_workers next to exe: {:?}", workers_dir);
                 return workers_dir;
             }
 
+            // Search up the directory tree (development builds)
+            // For tauri dev, exe is in src-tauri/target/debug/
+            // We need to go up to project root to find python_workers
             let mut current = exe_dir;
-            for _ in 0..3 {
+            for i in 0..5 {
                 if let Some(parent) = current.parent() {
                     let dev_workers_dir = parent.join("python_workers");
-                    if dev_workers_dir.exists() {
-                        println!("Found python_workers at: {:?}", dev_workers_dir);
+                    println!("Checking for python_workers at: {:?} (level {})", dev_workers_dir, i);
+                    if dev_workers_dir.exists() && is_valid_workers_dir(&dev_workers_dir) {
+                        println!("Found valid python_workers at: {:?}", dev_workers_dir);
                         return dev_workers_dir;
                     }
                     current = parent;
+                } else {
+                    break;
                 }
             }
         }
     }
 
+    // Fallback to current working directory
     let cwd_workers = std::env::current_dir()
         .unwrap_or_default()
         .join("python_workers");
@@ -96,6 +113,7 @@ pub fn get_workers_dir() -> std::path::PathBuf {
 const ML_WORKERS: &[&str] = &[
     "audio_separator",
     "audio_event_detector",
+    "model_enhancer",
 ];
 
 /// Check if a worker is an ML worker that requires special dependencies
@@ -216,6 +234,11 @@ pub async fn spawn_python_worker_async(
     let mut last_error: Option<String> = None;
 
     while let Ok(Some(line)) = reader.next_line().await {
+        // Log line size for debugging large outputs
+        if line.len() > 10000 {
+            println!("[Python worker] Received large line: {} bytes", line.len());
+        }
+
         if let Ok(message) = serde_json::from_str::<WorkerMessage>(&line) {
             match &message {
                 WorkerMessage::Progress { .. } => {
@@ -224,6 +247,7 @@ pub async fn spawn_python_worker_async(
                     }
                 }
                 WorkerMessage::Result { data } => {
+                    println!("[Python worker] Received result data");
                     last_result = Some(data.clone());
                 }
                 WorkerMessage::Error { message } => {
@@ -244,9 +268,17 @@ pub async fn spawn_python_worker_async(
                 }
             }
         } else {
-            println!("[Python] {}", line);
+            // Log parse failures for non-empty lines
+            if !line.trim().is_empty() {
+                println!("[Python] Failed to parse as WorkerMessage ({} bytes): {}",
+                    line.len(),
+                    if line.len() > 200 { &line[..200] } else { &line }
+                );
+            }
         }
     }
+
+    println!("[Python worker] Finished reading stdout, result present: {}", last_result.is_some());
 
     let status = child
         .wait()

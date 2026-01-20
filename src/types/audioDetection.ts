@@ -94,7 +94,7 @@ export interface TrainingConfig {
   augmentation: {
     time_mask_max_width: number;
     freq_mask_max_width: number;
-    gain_range: [number, number]; 
+    gain_range: [number, number];
     mixup_alpha: number;
   };
   class_weights: {
@@ -103,4 +103,86 @@ export interface TrainingConfig {
   };
   output_dir: string;
   export_onnx: boolean;
+}
+
+// ============================================================================
+// Enhance Model Mode Types
+// ============================================================================
+
+// Feedback types for user corrections on inference results
+export interface FeedbackSample {
+  id: string;
+  source_file: string;
+  start_seconds: number;
+  end_seconds: number;
+  original_confidence: number;
+  user_label: 'correct' | 'wrong';
+  is_manual: boolean; // true for user-added false negatives
+  created_at: string;
+}
+
+// Manual segment for false negatives (segments the model missed)
+export interface ManualSegment {
+  id: string;
+  start_seconds: number;
+  end_seconds: number;
+  created_at: string;
+}
+
+export interface FeedbackSession {
+  id: string;
+  source_file: string;
+  job_id: string;
+  model_version: string;
+  samples: FeedbackSample[];
+  manual_positives: ManualSegment[]; // User-marked false negatives
+  created_at: string;
+  updated_at: string;
+}
+
+// UI-facing training configuration (simplified)
+export interface UITrainingConfig {
+  epochs: number;
+  learning_rate: number;
+  bulk_positive_files?: string[]; // Full audio files to slice as positive samples
+  fine_tune?: boolean;           // Default: true - fine-tune existing model instead of training from scratch
+  freeze_layers?: boolean;       // Default: true - freeze early conv layers to prevent forgetting
+  unfreeze_after?: number;       // Default: 5 - unfreeze all layers after N epochs for gradual fine-tuning
+}
+
+export const DEFAULT_UI_TRAINING_CONFIG: UITrainingConfig = {
+  epochs: 15,             // Reduced from 30 for fine-tuning
+  learning_rate: 0.0001,  // Reduced from 0.001 for fine-tuning
+  bulk_positive_files: [],
+  fine_tune: true,
+  freeze_layers: true,
+  unfreeze_after: 5,
+};
+
+// Training progress state
+export interface TrainingProgress {
+  percent: number;
+  epoch: number;
+  total_epochs: number;
+  stage: string;
+  metrics: {
+    train_loss: number;
+    val_loss: number;
+    val_f1: number;
+    val_accuracy: number;
+  } | null;
+}
+
+// Event payloads for training
+export interface TrainingProgressEvent {
+  percent: number;
+  stage: string;
+  metrics: TrainingProgress['metrics'];
+}
+
+export interface TrainingCompleteEvent {
+  success: boolean;
+  model_path: string;
+  final_metrics: TrainingProgress['metrics'];
+  samples_used: number;
 }
