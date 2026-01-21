@@ -21,8 +21,7 @@ $Workers = @(
     "ssh_worker.py",
     "playlist_uploader_worker.py",
     "audio_separator.py",
-    "audio_event_detector.py",
-    "model_enhancer.py"
+    "audio_event_detector.py"
 )
 
 Write-Host "============================================" -ForegroundColor Cyan
@@ -171,23 +170,6 @@ foreach ($worker in $Workers) {
             # Collect all data and native binaries for ML/audio libraries
             $pyinstallerArgs += "--collect-all=librosa"
             $pyinstallerArgs += "--collect-all=onnxruntime"
-        }
-        "model_enhancer" {
-            $pyinstallerArgs += "--hidden-import=torch"
-            $pyinstallerArgs += "--hidden-import=librosa"
-            $pyinstallerArgs += "--hidden-import=numpy"
-            $pyinstallerArgs += "--hidden-import=sklearn"
-            $pyinstallerArgs += "--hidden-import=tqdm"
-            $pyinstallerArgs += "--hidden-import=yaml"
-            # Local ml_training module that must be bundled
-            $pyinstallerArgs += "--hidden-import=ml_training"
-            $pyinstallerArgs += "--hidden-import=ml_training.train"
-            $pyinstallerArgs += "--hidden-import=ml_training.model"
-            $pyinstallerArgs += "--hidden-import=ml_training.feature_extraction"
-            # Collect all data and native binaries for ML libraries
-            $pyinstallerArgs += "--collect-all=torch"
-            $pyinstallerArgs += "--collect-all=librosa"
-            $pyinstallerArgs += "--collect-all=sklearn"
         }
     }
 
