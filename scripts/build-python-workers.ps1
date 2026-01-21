@@ -143,6 +143,20 @@ foreach ($worker in $Workers) {
             $pyinstallerArgs += "--collect-all=pypinyin"
             $pyinstallerArgs += "--collect-all=opencc"
         }
+        "audio_separator" {
+            $pyinstallerArgs += "--hidden-import=torch"
+            $pyinstallerArgs += "--hidden-import=torchaudio"
+            $pyinstallerArgs += "--hidden-import=librosa"
+            $pyinstallerArgs += "--hidden-import=numpy"
+            $pyinstallerArgs += "--hidden-import=demucs"
+            $pyinstallerArgs += "--hidden-import=demucs.pretrained"
+            $pyinstallerArgs += "--hidden-import=demucs.apply"
+            # Collect all data and native binaries for ML libraries
+            $pyinstallerArgs += "--collect-all=torch"
+            $pyinstallerArgs += "--collect-all=torchaudio"
+            $pyinstallerArgs += "--collect-all=demucs"
+            $pyinstallerArgs += "--collect-all=librosa"
+        }
     }
 
     # Add the worker script path
