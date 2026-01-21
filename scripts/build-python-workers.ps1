@@ -61,6 +61,12 @@ if (-not $SkipVenv) {
     Write-Host "  Installing dependencies..."
     pip install --quiet pyinstaller
     pip install --quiet -r "$WorkersDir\requirements-bundle.txt"
+
+    # Install ML dependencies if requirements-ml.txt exists (for ML workers like audio_separator, audio_event_detector, model_enhancer)
+    if (Test-Path "$WorkersDir\requirements-ml.txt") {
+        Write-Host "  Installing ML dependencies..."
+        pip install --quiet -r "$WorkersDir\requirements-ml.txt"
+    }
     Write-Host "  Build environment ready!" -ForegroundColor Green
 } else {
     Write-Host "[1/4] Using system Python (skipping venv)..." -ForegroundColor Yellow
