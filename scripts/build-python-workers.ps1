@@ -157,6 +157,15 @@ foreach ($worker in $Workers) {
             $pyinstallerArgs += "--collect-all=demucs"
             $pyinstallerArgs += "--collect-all=librosa"
         }
+        "audio_event_detector" {
+            $pyinstallerArgs += "--hidden-import=numpy"
+            $pyinstallerArgs += "--hidden-import=librosa"
+            $pyinstallerArgs += "--hidden-import=onnxruntime"
+            $pyinstallerArgs += "--hidden-import=pydub"
+            # Collect all data and native binaries for ML/audio libraries
+            $pyinstallerArgs += "--collect-all=librosa"
+            $pyinstallerArgs += "--collect-all=onnxruntime"
+        }
     }
 
     # Add the worker script path
