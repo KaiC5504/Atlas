@@ -152,7 +152,7 @@ export function FeedbackSegmentCard({
             </div>
           )}
 
-          {audioBase64 && <AudioClipPlayer audioBase64={audioBase64} duration={duration} />}
+          {audioBase64 && <AudioClipPlayer audioBase64={audioBase64} duration={duration} autoPlay={true} />}
 
           <div className="flex items-center justify-between text-sm">
             <span className="font-mono text-green-400">
