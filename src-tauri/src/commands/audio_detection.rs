@@ -14,6 +14,12 @@ use std::process::Command;
 use tauri::{AppHandle, Emitter};
 use tokio::sync::mpsc;
 
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
+
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
 /// List all audio detection jobs from the JSON file
 #[tauri::command]
 pub fn list_audio_detection_jobs() -> Result<Vec<AudioDetectionJob>, String> {
@@ -342,30 +348,33 @@ pub async fn extract_audio_segment(
 
     // Use ffmpeg to extract segment
     let duration = end_seconds - start_seconds;
-    let output = Command::new("ffmpeg")
-        .args([
-            "-y",
-            "-ss",
-            &start_seconds.to_string(),
-            "-t",
-            &duration.to_string(),
-            "-i",
-            &source_file,
-            "-acodec",
-            "pcm_s16le",
-            "-ar",
-            "44100",
-            "-ac",
-            "2",
-            output_path.to_str().unwrap(),
-        ])
-        .output()
-        .map_err(|e| {
-            format!(
-                "Failed to run ffmpeg: {}. Please ensure FFmpeg is installed and in your PATH.",
-                e
-            )
-        })?;
+    let mut cmd = Command::new("ffmpeg");
+    cmd.args([
+        "-y",
+        "-ss",
+        &start_seconds.to_string(),
+        "-t",
+        &duration.to_string(),
+        "-i",
+        &source_file,
+        "-acodec",
+        "pcm_s16le",
+        "-ar",
+        "44100",
+        "-ac",
+        "2",
+        output_path.to_str().unwrap(),
+    ]);
+
+    #[cfg(windows)]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+
+    let output = cmd.output().map_err(|e| {
+        format!(
+            "Failed to run ffmpeg: {}. Please ensure FFmpeg is installed and in your PATH.",
+            e
+        )
+    })?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
