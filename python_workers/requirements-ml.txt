@@ -1,11 +1,12 @@
 # ML-specific dependencies for audio_separator and audio_event_detector workers
 # These are separated from requirements-bundle.txt due to their large size
-torch
-torchaudio
+# Note: torch and torchaudio are installed separately in build script with CUDA support
 demucs
 librosa
 numpy
+onnx
 onnxruntime
+onnxscript
 pydub
 tensorboard
 PyYAML

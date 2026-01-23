@@ -1,15 +1,22 @@
 """
 Training script for the audio event detection model.
 """
+# Subprocess protection - must be before heavy imports
 import os
+import sys
+if os.environ.get('ATLAS_WORKER_RUNNING') and __name__ == '__main__':
+    # This is a subprocess trying to re-run as main
+    print(f"[train.py] Subprocess detected, exiting early", file=sys.stderr)
+    sys.exit(0)
+
 import json
 import yaml
 import argparse
 import platform
+import multiprocessing
 import numpy as np
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional, Any
-import sys
+from typing import Dict, List, Tuple, Optional, Any, Callable
 from datetime import datetime
 
 import torch
@@ -21,6 +28,26 @@ from sklearn.metrics import (
     accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
 )
 from tqdm import tqdm
+
+# Global flag to track if we're running in worker mode (to disable tqdm and use proper logging)
+_WORKER_MODE = False
+_WORKER_LOG_FN: Optional[Callable[[str, str], None]] = None
+
+
+def set_worker_mode(enabled: bool = True, log_fn: Callable[[str, str], None] = None):
+    """Enable worker mode to disable tqdm and use proper logging."""
+    global _WORKER_MODE, _WORKER_LOG_FN
+    _WORKER_MODE = enabled
+    _WORKER_LOG_FN = log_fn
+
+
+def _log(message: str, level: str = "info"):
+    """Log a message using the appropriate method based on mode."""
+    global _WORKER_MODE, _WORKER_LOG_FN
+    if _WORKER_MODE and _WORKER_LOG_FN:
+        _WORKER_LOG_FN(message, level)
+    else:
+        print(message)
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -68,7 +95,7 @@ class AudioDataset(Dataset):
             (f, 0) for f in self.negative_files
         ]
 
-        print(f"Loaded {len(self.positive_files)} positive and {len(self.negative_files)} negative {split} samples")
+        _log(f"Loaded {len(self.positive_files)} positive and {len(self.negative_files)} negative {split} samples")
 
     def __len__(self) -> int:
         return len(self.samples)
@@ -188,7 +215,7 @@ def load_pretrained_weights(model: nn.Module, checkpoint_path: str, device: torc
         return True
 
     except Exception as e:
-        print(f"Warning: Could not load pretrained weights: {e}")
+        _log(f"Warning: Could not load pretrained weights: {e}", "warning")
         return False
 
 
@@ -231,10 +258,29 @@ def train_epoch(
     total_loss = 0
     all_preds = []
     all_labels = []
+    total_batches = len(loader)
+    batch_idx = 0
 
-    for batch_x, batch_y in tqdm(loader, desc="Training", leave=False):
-        batch_x = batch_x.to(device, non_blocking=True)
-        batch_y = batch_y.to(device, non_blocking=True)
+    # Disable tqdm in worker mode to avoid stdout interference
+    loader_iter = tqdm(loader, desc="Training", leave=False, disable=_WORKER_MODE)
+
+    # Log before starting iteration (this is where hangs often occur)
+    _log(f"    Starting DataLoader iteration ({total_batches} batches)...")
+
+    for batch_x, batch_y in loader_iter:
+        # Log first batch and every 10% of batches
+        if batch_idx == 0:
+            _log(f"    First batch received! Shape: x={batch_x.shape}, y={batch_y.shape}")
+        elif (batch_idx + 1) % max(1, total_batches // 10) == 0:
+            _log(f"    Training batch {batch_idx + 1}/{total_batches}")
+        batch_idx += 1
+
+        try:
+            batch_x = batch_x.to(device, non_blocking=True)
+            batch_y = batch_y.to(device, non_blocking=True)
+        except Exception as e:
+            _log(f"    ERROR moving batch to device: {type(e).__name__}: {e}", "error")
+            raise
 
         optimizer.zero_grad()
 
@@ -244,6 +290,9 @@ def train_epoch(
                 outputs = model(batch_x)
                 loss = criterion(outputs, batch_y)
             scaler.scale(loss).backward()
+            # Gradient clipping to prevent explosion with large loss values
+            scaler.unscale_(optimizer)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             scaler.step(optimizer)
             scaler.update()
         else:
@@ -288,7 +337,9 @@ def evaluate(
     all_labels = []
 
     with torch.no_grad():
-        for batch_x, batch_y in tqdm(loader, desc="Evaluating", leave=False):
+        # Disable tqdm in worker mode to avoid stdout interference
+        loader_iter = tqdm(loader, desc="Evaluating", leave=False, disable=_WORKER_MODE)
+        for batch_x, batch_y in loader_iter:
             batch_x = batch_x.to(device, non_blocking=True)
             batch_y = batch_y.to(device, non_blocking=True)
 
@@ -365,8 +416,11 @@ def train_model(config_path: str) -> str:
     val_dataset = AudioDataset(data_dir, split='val', augment=False, config=config)
 
     # Optimize num_workers for multi-threaded data loading
-    # For RTX 4070, use 4-8 workers for faster data loading
-    num_workers = 4 if device.type == 'cuda' else 0
+    # NOTE: On Windows, num_workers > 0 with CUDA causes hangs due to multiprocessing issues
+    if platform.system() == 'Windows':
+        num_workers = 0  # Windows + CUDA = must use 0 workers to avoid deadlock
+    else:
+        num_workers = 4 if device.type == 'cuda' else 0
 
     # Create dataloaders
     train_loader = DataLoader(
@@ -527,6 +581,14 @@ def train_model_with_progress(
     Returns:
         Dict with training results and metrics
     """
+    _log("=" * 60)
+    _log("ENTERING train_model_with_progress")
+    _log("=" * 60)
+    _log(f"  data_dir: {data_dir}")
+    _log(f"  output_path: {output_path}")
+    _log(f"  config_overrides: {config_overrides}")
+    _log(f"  fine_tuning: {fine_tuning}")
+
     # Use default config with overrides
     config_dict = {
         'data_dir': data_dir,
@@ -553,19 +615,40 @@ def train_model_with_progress(
             if key in config_dict:
                 config_dict[key] = value
 
+    _log(f"Final config: epochs={config_dict['epochs']}, lr={config_dict['learning_rate']}, batch_size={config_dict['batch_size']}")
     config = TrainingConfig.from_dict(config_dict)
 
-    # Setup device
+    # Setup device with proper CUDA initialization
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    print(f"Training with device: {device}")
+    _log(f"Training with device: {device}")
 
     # Enable mixed precision training for RTX GPUs
     use_amp = device.type == 'cuda'
-    scaler = torch.amp.GradScaler('cuda') if use_amp else None
+    scaler = None
+    if use_amp:
+        try:
+            scaler = torch.amp.GradScaler('cuda')
+            _log("Mixed precision training (AMP) enabled")
+        except Exception as e:
+            _log(f"Warning: Could not initialize AMP GradScaler: {e}", "warning")
+            use_amp = False
+            scaler = None
 
     # Create datasets
-    train_dataset = AudioDataset(data_dir, split='train', augment=True, config=config)
-    val_dataset = AudioDataset(data_dir, split='val', augment=False, config=config)
+    _log("Creating datasets...")
+    try:
+        train_dataset = AudioDataset(data_dir, split='train', augment=True, config=config)
+        _log(f"Train dataset created: {len(train_dataset)} samples")
+    except Exception as e:
+        _log(f"ERROR creating train dataset: {type(e).__name__}: {e}", "error")
+        raise
+
+    try:
+        val_dataset = AudioDataset(data_dir, split='val', augment=False, config=config)
+        _log(f"Val dataset created: {len(val_dataset)} samples")
+    except Exception as e:
+        _log(f"ERROR creating val dataset: {type(e).__name__}: {e}", "error")
+        raise
 
     # Use 80/20 split if no val folder or empty val
     if len(val_dataset) == 0 and len(train_dataset) > 0:
@@ -582,18 +665,35 @@ def train_model_with_progress(
     if len(train_dataset) == 0:
         raise ValueError("No training samples found in dataset")
 
-    num_workers = 4 if device.type == 'cuda' else 0
-    train_loader = DataLoader(
-        train_dataset, batch_size=config.batch_size, shuffle=True,
-        num_workers=num_workers, pin_memory=True if device.type == 'cuda' else False
-    )
-    val_loader = DataLoader(
-        val_dataset, batch_size=config.batch_size * 2, shuffle=False,
-        num_workers=num_workers, pin_memory=True if device.type == 'cuda' else False
-    )
+    # NOTE: On Windows, num_workers > 0 with CUDA causes hangs due to multiprocessing issues
+    if platform.system() == 'Windows':
+        num_workers = 0  # Windows + CUDA = must use 0 workers to avoid deadlock
+    else:
+        num_workers = 4 if device.type == 'cuda' else 0
+
+    _log(f"Creating DataLoaders with num_workers={num_workers}, batch_size={config.batch_size}")
+    try:
+        train_loader = DataLoader(
+            train_dataset, batch_size=config.batch_size, shuffle=True,
+            num_workers=num_workers, pin_memory=True if device.type == 'cuda' else False
+        )
+        val_loader = DataLoader(
+            val_dataset, batch_size=config.batch_size * 2, shuffle=False,
+            num_workers=num_workers, pin_memory=True if device.type == 'cuda' else False
+        )
+        _log(f"DataLoaders created: train={len(train_loader)} batches, val={len(val_loader)} batches")
+    except Exception as e:
+        _log(f"ERROR creating DataLoaders: {type(e).__name__}: {e}", "error")
+        raise
 
     # Create model
-    model = create_model('cnn_v1').to(device)
+    _log("Creating model...")
+    try:
+        model = create_model('cnn_v1').to(device)
+        _log(f"Model created and moved to {device}")
+    except Exception as e:
+        _log(f"ERROR creating model: {type(e).__name__}: {e}", "error")
+        raise
 
     # Handle fine-tuning: load pretrained weights and optionally freeze layers
     is_fine_tuning = False
@@ -606,26 +706,26 @@ def train_model_with_progress(
         unfreeze_after_epoch = fine_tuning.get('unfreeze_after', 5)
 
         if pretrained_path and Path(pretrained_path).exists():
-            print(f"\n*** FINE-TUNING MODE ***")
-            print(f"Loading pretrained weights from: {pretrained_path}")
+            _log("*** FINE-TUNING MODE ***")
+            _log(f"Loading pretrained weights from: {pretrained_path}")
 
             if load_pretrained_weights(model, pretrained_path, device):
                 is_fine_tuning = True
-                print(f"Successfully loaded pretrained weights")
+                _log("Successfully loaded pretrained weights")
 
                 if freeze_layers:
                     frozen_count = freeze_early_layers(model, num_blocks=2)
                     trainable_count = sum(p.numel() for p in model.parameters() if p.requires_grad)
                     total_count = sum(p.numel() for p in model.parameters())
-                    print(f"Frozen {frozen_count:,} parameters ({frozen_count/total_count*100:.1f}%)")
-                    print(f"Trainable: {trainable_count:,} parameters")
-                    print(f"Will unfreeze all layers after epoch {unfreeze_after_epoch}")
+                    _log(f"Frozen {frozen_count:,} parameters ({frozen_count/total_count*100:.1f}%)")
+                    _log(f"Trainable: {trainable_count:,} parameters")
+                    _log(f"Will unfreeze all layers after epoch {unfreeze_after_epoch}")
             else:
-                print("Could not load pretrained weights, training from scratch")
+                _log("Could not load pretrained weights, training from scratch")
         else:
-            print("No pretrained model found, training from scratch")
+            _log("No pretrained model found, training from scratch")
     else:
-        print("Training from scratch (no fine-tuning config provided)")
+        _log("Training from scratch (no fine-tuning config provided)")
 
     # Calculate class weights to handle imbalance
     # Count positive and negative samples
@@ -646,7 +746,7 @@ def train_model_with_progress(
     # Cap at 3.0 to balance up to 1:3 ratio without over-correction
     pos_weight_value = min(num_neg / max(num_pos, 1), 3.0)
     pos_weight = torch.tensor([pos_weight_value]).to(device)
-    print(f"Class weighting: pos_weight={pos_weight_value:.2f} (positives={num_pos}, negatives={num_neg})")
+    _log(f"Class weighting: pos_weight={pos_weight_value:.2f} (positives={num_pos}, negatives={num_neg})")
 
     # Loss and optimizer
     criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
@@ -665,68 +765,97 @@ def train_model_with_progress(
     best_model_path = output_dir / 'best_model.pt'
     layers_unfrozen = False
 
+    _log("=" * 60)
+    _log(f"STARTING TRAINING LOOP: {config.epochs} epochs")
+    _log("=" * 60)
+
     for epoch in range(config.epochs):
-        # Gradual unfreezing: unfreeze all layers after specified epoch
-        if is_fine_tuning and freeze_layers and not layers_unfrozen and epoch >= unfreeze_after_epoch:
-            print(f"\n*** Unfreezing all layers at epoch {epoch + 1} ***")
-            unfreeze_all_layers(model)
-            layers_unfrozen = True
+        _log(f"--- EPOCH {epoch + 1}/{config.epochs} START ---")
 
-            # Recreate optimizer with all parameters and lower learning rate
-            optimizer = optim.AdamW(
-                model.parameters(),
-                lr=config.learning_rate * 0.1,  # Lower LR for unfrozen layers
-                weight_decay=config.weight_decay
-            )
-            # Reset scheduler with remaining epochs
-            remaining_epochs = config.epochs - epoch
-            scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=remaining_epochs)
-            print(f"Learning rate reduced to {config.learning_rate * 0.1} for fine-tuning all layers")
+        try:
+            # Gradual unfreezing: unfreeze all layers after specified epoch
+            if is_fine_tuning and freeze_layers and not layers_unfrozen and epoch >= unfreeze_after_epoch:
+                _log(f"*** Unfreezing all layers at epoch {epoch + 1} ***")
+                unfreeze_all_layers(model)
+                layers_unfrozen = True
 
-        train_metrics = train_epoch(model, train_loader, criterion, optimizer, device, scaler, use_amp)
-        val_metrics = evaluate(model, val_loader, criterion, device, use_amp)
-        scheduler.step()
+                # Recreate optimizer with all parameters and lower learning rate
+                optimizer = optim.AdamW(
+                    model.parameters(),
+                    lr=config.learning_rate * 0.1,  # Lower LR for unfrozen layers
+                    weight_decay=config.weight_decay
+                )
+                # Reset scheduler with remaining epochs
+                remaining_epochs = config.epochs - epoch
+                scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=remaining_epochs)
+                _log(f"Learning rate reduced to {config.learning_rate * 0.1} for fine-tuning all layers")
 
-        # Call progress callback
-        if progress_callback:
-            progress_callback(epoch + 1, config.epochs, val_metrics)
+            _log(f"  Starting train_epoch...")
+            train_metrics = train_epoch(model, train_loader, criterion, optimizer, device, scaler, use_amp)
+            _log(f"  Train: loss={train_metrics['loss']:.4f}, acc={train_metrics['accuracy']:.4f}, f1={train_metrics['f1']:.4f}")
 
-        # Save best model
-        if val_metrics['f1'] > best_f1:
-            best_f1 = val_metrics['f1']
-            best_metrics = val_metrics
-            torch.save({
-                'epoch': epoch,
-                'model_state_dict': model.state_dict(),
-                'val_metrics': val_metrics,
-            }, best_model_path)
+            _log(f"  Starting evaluate...")
+            val_metrics = evaluate(model, val_loader, criterion, device, use_amp)
+            _log(f"  Val: loss={val_metrics['loss']:.4f}, acc={val_metrics['accuracy']:.4f}, f1={val_metrics['f1']:.4f}")
+
+            scheduler.step()
+
+            # Call progress callback
+            if progress_callback:
+                _log(f"  Calling progress_callback({epoch + 1}, {config.epochs}, ...)")
+                progress_callback(epoch + 1, config.epochs, val_metrics)
+
+            # Save best model
+            if val_metrics['f1'] > best_f1:
+                best_f1 = val_metrics['f1']
+                best_metrics = val_metrics
+                _log(f"  NEW BEST MODEL: f1={best_f1:.4f}, saving to {best_model_path}")
+                torch.save({
+                    'epoch': epoch,
+                    'model_state_dict': model.state_dict(),
+                    'val_metrics': val_metrics,
+                }, best_model_path)
+
+            _log(f"--- EPOCH {epoch + 1}/{config.epochs} COMPLETE ---")
+
+        except Exception as e:
+            _log(f"ERROR in epoch {epoch + 1}: {type(e).__name__}: {e}", "error")
+            import traceback
+            _log(f"Traceback:\n{traceback.format_exc()}", "error")
+            raise
 
     # Export to ONNX
+    export_failed = False
     if best_model_path.exists():
         checkpoint = torch.load(best_model_path, weights_only=False)
         model.load_state_dict(checkpoint['model_state_dict'])
         model.eval()
-        export_to_onnx(model, output_path)
+        try:
+            export_to_onnx(model, output_path, log_fn=_log)
+        except Exception as e:
+            _log(f"ONNX export failed: {e}", "error")
+            export_failed = True
 
-    # Print final training summary
-    print("\n" + "=" * 50)
-    print("TRAINING COMPLETE" + (" (Fine-tuned)" if is_fine_tuning else " (From scratch)"))
-    print("=" * 50)
+    # Log final training summary
+    _log("=" * 50)
+    _log("TRAINING COMPLETE" + (" (Fine-tuned)" if is_fine_tuning else " (From scratch)"))
+    _log("=" * 50)
     if best_metrics:
-        print(f"  F1 Score:    {best_metrics.get('f1', 0):.4f}")
-        print(f"  Accuracy:    {best_metrics.get('accuracy', 0):.4f}")
-        print(f"  Precision:   {best_metrics.get('precision', 0):.4f}")
-        print(f"  Recall:      {best_metrics.get('recall', 0):.4f}")
-        print(f"  AUC:         {best_metrics.get('auc', 0):.4f}")
-    print(f"  Model saved: {output_path}")
+        _log(f"  F1 Score:    {best_metrics.get('f1', 0):.4f}")
+        _log(f"  Accuracy:    {best_metrics.get('accuracy', 0):.4f}")
+        _log(f"  Precision:   {best_metrics.get('precision', 0):.4f}")
+        _log(f"  Recall:      {best_metrics.get('recall', 0):.4f}")
+        _log(f"  AUC:         {best_metrics.get('auc', 0):.4f}")
+    _log(f"  Model saved: {output_path}")
     if is_fine_tuning:
-        print(f"  Mode: Fine-tuning with {'layer freezing' if freeze_layers else 'all layers trainable'}")
-    print("=" * 50 + "\n")
+        _log(f"  Mode: Fine-tuning with {'layer freezing' if freeze_layers else 'all layers trainable'}")
+    _log("=" * 50)
 
     return {
         'metrics': best_metrics,
-        'model_path': str(output_path),
+        'model_path': str(output_path) if not export_failed else None,
         'fine_tuned': is_fine_tuning,
+        'export_failed': export_failed,
     }
 
 
@@ -755,4 +884,6 @@ def main():
 
 
 if __name__ == '__main__':
+    # Required for Windows multiprocessing support
+    multiprocessing.freeze_support()
     main()

@@ -65,6 +65,10 @@ if (-not $SkipVenv) {
     # Install ML dependencies if requirements-ml.txt exists (for ML workers like audio_separator, audio_event_detector, model_enhancer)
     if (Test-Path "$WorkersDir\requirements-ml.txt") {
         Write-Host "  Installing ML dependencies..."
+        # Install PyTorch with CUDA support first (CUDA 12.4 for RTX 40-series)
+        Write-Host "  Installing PyTorch with CUDA 12.4 support..."
+        pip install --quiet torch torchaudio --index-url https://download.pytorch.org/whl/cu124
+        # Install remaining ML dependencies
         pip install --quiet -r "$WorkersDir\requirements-ml.txt"
     }
     Write-Host "  Build environment ready!" -ForegroundColor Green
@@ -78,6 +82,16 @@ Write-Host "[2/4] Preparing output directory..." -ForegroundColor Cyan
 New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
 Write-Host "  Output: $OutputDir" -ForegroundColor Green
 Write-Host ""
+
+# Worker-specific module directories (in addition to common/)
+$WorkerModuleDirs = @{
+    "model_enhancer" = @("ml_training")
+    "audio_event_detector" = @("ml_training")
+    "playlist_uploader_worker" = @("playlist_uploader")
+}
+
+# ML workers that depend on requirements-ml.txt
+$MLWorkers = @("audio_separator", "audio_event_detector", "model_enhancer")
 
 # Worker-specific hidden imports configuration
 $WorkerConfig = @{
@@ -137,7 +151,9 @@ $WorkerConfig = @{
         "--hidden-import=numpy",
         "--hidden-import=librosa",
         "--hidden-import=onnx",
+        "--hidden-import=onnx.defs",
         "--hidden-import=onnxruntime",
+        "--hidden-import=onnxscript",
         "--hidden-import=tensorboard",
         "--hidden-import=sklearn",
         "--hidden-import=sklearn.metrics",
@@ -147,7 +163,9 @@ $WorkerConfig = @{
         "--collect-all=librosa",
         "--collect-all=tensorboard",
         "--collect-all=sklearn",
-        "--collect-all=onnxruntime"
+        "--collect-all=onnx",
+        "--collect-all=onnxruntime",
+        "--collect-all=onnxscript"
     )
 }
 
@@ -165,25 +183,75 @@ foreach ($worker in $Workers) {
         continue
     }
 
-    # Skip if exe exists and is newer than source (unless -Clean)
+    # Skip if exe exists and is newer than all dependencies (unless -Clean)
     $exePath = "$OutputDir\$workerName.exe"
     if (-not $Clean -and (Test-Path $exePath)) {
         $exeTime = (Get-Item $exePath).LastWriteTime
+        # Add 30 second tolerance to handle parallel build timing issues
+        # Files modified within 30 seconds of exe creation are considered "same build"
+        $exeTimeWithTolerance = $exeTime.AddSeconds(-30)
         $srcTime = (Get-Item $workerPath).LastWriteTime
+        $needsRebuild = $false
+        $rebuildReason = ""
 
-        # Also check common module timestamps
-        $commonDir = "$WorkersDir\common"
-        $commonChanged = $false
-        if (Test-Path $commonDir) {
-            Get-ChildItem "$commonDir\*.py" | ForEach-Object {
-                if ($_.LastWriteTime -gt $exeTime) { $commonChanged = $true }
+        # Check if source file changed
+        if ($srcTime -gt $exeTimeWithTolerance) {
+            $needsRebuild = $true
+            $rebuildReason = "source changed"
+        }
+
+        # Check common module timestamps
+        if (-not $needsRebuild) {
+            $commonDir = "$WorkersDir\common"
+            if (Test-Path $commonDir) {
+                Get-ChildItem "$commonDir\*.py" -ErrorAction SilentlyContinue | ForEach-Object {
+                    if ($_.LastWriteTime -gt $exeTimeWithTolerance) {
+                        $needsRebuild = $true
+                        $rebuildReason = "common/ changed"
+                    }
+                }
             }
         }
 
-        if ($srcTime -lt $exeTime -and -not $commonChanged) {
+        # Check worker-specific module directories
+        if (-not $needsRebuild -and $WorkerModuleDirs.ContainsKey($workerName)) {
+            foreach ($moduleDir in $WorkerModuleDirs[$workerName]) {
+                $modulePath = "$WorkersDir\$moduleDir"
+                if (Test-Path $modulePath) {
+                    Get-ChildItem "$modulePath\*.py" -Recurse -ErrorAction SilentlyContinue | ForEach-Object {
+                        if ($_.LastWriteTime -gt $exeTimeWithTolerance) {
+                            $needsRebuild = $true
+                            $rebuildReason = "$moduleDir/ changed"
+                        }
+                    }
+                }
+            }
+        }
+
+        # Check requirements-bundle.txt (affects all workers)
+        if (-not $needsRebuild) {
+            $reqBundlePath = "$WorkersDir\requirements-bundle.txt"
+            if ((Test-Path $reqBundlePath) -and (Get-Item $reqBundlePath).LastWriteTime -gt $exeTimeWithTolerance) {
+                $needsRebuild = $true
+                $rebuildReason = "requirements-bundle.txt changed"
+            }
+        }
+
+        # Check requirements-ml.txt (affects ML workers only)
+        if (-not $needsRebuild -and $MLWorkers -contains $workerName) {
+            $reqMLPath = "$WorkersDir\requirements-ml.txt"
+            if ((Test-Path $reqMLPath) -and (Get-Item $reqMLPath).LastWriteTime -gt $exeTimeWithTolerance) {
+                $needsRebuild = $true
+                $rebuildReason = "requirements-ml.txt changed"
+            }
+        }
+
+        if (-not $needsRebuild) {
             Write-Host "  SKIP: $workerName.exe is up to date" -ForegroundColor DarkGray
             $skippedCount++
             continue
+        } else {
+            Write-Host "  REBUILD: $workerName ($rebuildReason)" -ForegroundColor Yellow
         }
     }
 

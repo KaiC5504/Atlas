@@ -1,9 +1,10 @@
+use log::{debug, error, info, warn};
+use serde_json::json;
 use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
-use serde_json::json;
 use sysinfo::{ProcessRefreshKind, System};
 use tauri::{AppHandle, Emitter};
 
@@ -107,11 +108,11 @@ pub fn start_game_detection(
 
     // Only start if not already running
     if is_running.swap(true, Ordering::SeqCst) {
-        println!("Game detection is already running");
+        debug!("Game detection is already running");
         return;
     }
 
-    println!("Starting game detection...");
+    info!("Starting game detection...");
 
     let monitoring_state = monitoring_state.clone();
 
@@ -132,7 +133,7 @@ pub fn start_game_detection(
 
         let detected_game = loop {
             if !is_running.load(Ordering::SeqCst) {
-                println!("Game detection stopped before finding a game");
+                debug!("Game detection stopped before finding a game");
                 return;
             }
 
@@ -155,7 +156,7 @@ pub fn start_game_detection(
             for game in whitelist.iter().filter(|g| g.enabled) {
                 if running_processes.contains(&game.normalized_process) {
                     found_game = Some((game.name.clone(), game.process_name.clone()));
-                    println!("Matched game: {} (process: {})", game.name, game.process_name);
+                    debug!("Matched game: {} (process: {})", game.name, game.process_name);
                     break;
                 }
             }
@@ -168,16 +169,16 @@ pub fn start_game_detection(
         };
 
         let (game_name, process_name) = detected_game;
-        println!("Game detected: {} ({}) - stopping detection polling", game_name, process_name);
+        info!("Game detected: {} ({}) - stopping detection polling", game_name, process_name);
 
         match session_manager.start_session(&game_name, &process_name) {
             Ok(session) => {
                 if let Err(e) = app.emit("gaming:session_started", json!({ "session": session })) {
-                    eprintln!("Failed to emit session_started event: {}", e);
+                    warn!("Failed to emit session_started event: {}", e);
                 }
             }
             Err(e) => {
-                eprintln!("Failed to start session for {}: {}", game_name, e);
+                error!("Failed to start session for {}: {}", game_name, e);
                 is_running.store(false, Ordering::SeqCst);
                 return;
             }
@@ -185,43 +186,43 @@ pub fn start_game_detection(
 
         is_running.store(false, Ordering::SeqCst);
         if let Err(e) = app.emit("gaming:detection_stopped", json!({ "reason": "game_detected" })) {
-            eprintln!("Failed to emit detection_stopped event: {}", e);
+            warn!("Failed to emit detection_stopped event: {}", e);
         }
-        println!("Detection turned off after game detected");
+        debug!("Detection turned off after game detected");
 
         let process_name_lower = process_name
             .trim_end_matches(".exe")
             .trim_end_matches(".EXE")
             .to_lowercase();
 
-        println!("Phase 2: Monitoring for process exit: {}", process_name_lower);
+        debug!("Phase 2: Monitoring for process exit: {}", process_name_lower);
 
         // Helper closure to end the session and cleanup
         let end_session_and_cleanup = |session_manager: &Arc<GamingSessionManager>,
                                        app: &AppHandle,
                                        process_name: &str,
                                        monitoring_state: Arc<MonitoringState>| {
-            println!("Game process exited: {}", process_name);
+            info!("Game process exited: {}", process_name);
 
             // End the gaming session
             match session_manager.end_session_by_process(process_name) {
                 Ok(session) => {
-                    println!("Gaming session ended successfully");
+                    info!("Gaming session ended successfully");
                     if let Err(e) = app.emit("gaming:session_ended", json!({ "session": session })) {
-                        eprintln!("Failed to emit session_ended event: {}", e);
+                        warn!("Failed to emit session_ended event: {}", e);
                     }
                 }
                 Err(e) => {
-                    eprintln!("Failed to end session for {}: {}", process_name, e);
+                    error!("Failed to end session for {}: {}", process_name, e);
                 }
             }
 
-            println!("Stopping performance monitoring...");
+            debug!("Stopping performance monitoring...");
             stop_monitoring(monitoring_state);
-            println!("Performance monitoring stop signal sent");
+            debug!("Performance monitoring stop signal sent");
 
             if let Err(e) = app.emit("performance:monitoring_stopped", json!({ "reason": "game_closed" })) {
-                eprintln!("Failed to emit monitoring_stopped event: {}", e);
+                warn!("Failed to emit monitoring_stopped event: {}", e);
             }
 
             use crate::commands::settings::get_settings;
@@ -229,23 +230,23 @@ pub fn start_game_detection(
 
             let settings = get_settings().unwrap_or_default();
             if settings.auto_restore_enabled {
-                println!("Auto-restore enabled, waiting 3 seconds before restoring processes...");
+                info!("Auto-restore enabled, waiting 3 seconds before restoring processes...");
 
                 std::thread::sleep(std::time::Duration::from_secs(3));
 
                 if let Ok(restore_list) = restore::load_restore_list() {
                     if !restore_list.processes.is_empty() {
-                        println!("Restoring {} killed processes...", restore_list.processes.len());
+                        info!("Restoring {} killed processes...", restore_list.processes.len());
                         let result = restore::restore_all_processes(&restore_list);
-                        println!("Restore complete: {} restored, {} skipped, {} failed",
+                        info!("Restore complete: {} restored, {} skipped, {} failed",
                                  result.restored, result.skipped_self_restoring, result.failed);
 
                         if let Err(e) = app.emit("task_monitor:restore_completed", &result) {
-                            eprintln!("Failed to emit restore_completed event: {}", e);
+                            warn!("Failed to emit restore_completed event: {}", e);
                         }
 
                         if let Err(e) = restore::clear_restore_list() {
-                            eprintln!("Failed to clear restore list: {}", e);
+                            warn!("Failed to clear restore list: {}", e);
                         }
                     }
                 }
@@ -273,7 +274,7 @@ pub fn start_game_detection(
                 let strategy = determine_detection_strategy(!handle.is_null(), true);
 
                 if strategy == DetectionStrategy::HandleWait {
-                    println!("Phase 2: Using process handle wait for instant exit detection (PID: {})", pid);
+                    debug!("Phase 2: Using process handle wait for instant exit detection (PID: {})", pid);
 
                     loop {
                         let result = unsafe { WaitForSingleObject(handle, 100) };
@@ -286,7 +287,7 @@ pub fn start_game_detection(
 
                         match handle_wait_result(wait_result) {
                             WaitResultAction::EndSession => {
-                                println!("Game process exited (detected via handle wait)");
+                                debug!("Game process exited (detected via handle wait)");
                                 unsafe { CloseHandle(handle) };
                                 end_session_and_cleanup(&session_manager, &app, &process_name, monitoring_state);
                                 break;
@@ -295,20 +296,20 @@ pub fn start_game_detection(
                                 continue;
                             }
                             WaitResultAction::FallbackToPolling => {
-                                println!("Process handle invalid, falling back to polling");
+                                debug!("Process handle invalid, falling back to polling");
                                 unsafe { CloseHandle(handle) };
                                 break;
                             }
                         }
                     }
 
-                    println!("Game session monitoring thread exiting");
+                    debug!("Game session monitoring thread exiting");
                     return;
                 } else {
-                    println!("Phase 2: Handle acquisition failed, using polling fallback");
+                    debug!("Phase 2: Handle acquisition failed, using polling fallback");
                 }
             } else {
-                println!("Phase 2: Could not find process PID, using polling fallback");
+                debug!("Phase 2: Could not find process PID, using polling fallback");
             }
         }
 
@@ -337,13 +338,13 @@ pub fn start_game_detection(
             check_interval = (check_interval * 2).min(MAX_INTERVAL);
         }
 
-        println!("Game session monitoring thread exiting");
+        debug!("Game session monitoring thread exiting");
     });
 }
 
 /// Stop game detection
 pub fn stop_game_detection(detection_state: Arc<GameDetectionState>) {
-    println!("Stopping game detection...");
+    debug!("Stopping game detection...");
     detection_state.is_running.store(false, Ordering::SeqCst);
 }
 

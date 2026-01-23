@@ -3,6 +3,7 @@ mod discord;
 mod file_manager;
 mod gaming;
 mod launcher;
+mod logging;
 mod models;
 mod performance;
 mod process_manager;
@@ -70,10 +71,11 @@ use tauri::{
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Manager, WindowEvent,
 };
+use log::{error, info, warn};
 use utils::{
     get_audio_detection_jobs_json_path, get_bottleneck_thresholds_json_path, get_downloads_json_path,
     get_game_library_json_path, get_game_whitelist_json_path, get_gaming_sessions_json_path,
-    get_last_run_version_path, get_ml_jobs_json_path, get_quick_actions_json_path,
+    get_last_run_version_path, get_logs_dir, get_ml_jobs_json_path, get_quick_actions_json_path,
     get_server_config_json_path, get_settings_json_path, get_valorant_store_json_path,
     initialize_data_directories,
 };
@@ -104,16 +106,12 @@ fn initialize_app_data() -> Result<(), String> {
     // Task monitor files - initialize gaming profiles
     task_monitor::profiles::initialize_profiles()?;
 
-    println!("App data initialized successfully");
+    info!("App data initialized successfully");
     Ok(())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    if let Err(e) = initialize_app_data() {
-        eprintln!("Failed to initialize app data: {}", e);
-    }
-
     let detection_state = Arc::new(GameDetectionState::default());
     let bottleneck_analyzer = Arc::new(BottleneckAnalyzer::new());
     let shared_metrics = Arc::new(SharedMetrics::new());
@@ -121,6 +119,23 @@ pub fn run() {
     let discord_manager = Arc::new(DiscordPresenceManager::new());
 
     tauri::Builder::default()
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                .targets([
+                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Folder {
+                        path: get_logs_dir(),
+                        file_name: Some("atlas".into()),
+                    }),
+                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Webview),
+                    #[cfg(debug_assertions)]
+                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
+                ])
+                .max_file_size(10_000_000) // 10MB
+                .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepAll)
+                .level(log::LevelFilter::Info)
+                .timezone_strategy(tauri_plugin_log::TimezoneStrategy::UseLocal)
+                .build(),
+        )
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
@@ -164,6 +179,14 @@ pub fn run() {
         .manage(discord_manager.clone())
         .manage(DownloadedUpdateBytes(std::sync::Mutex::new(None)))
         .setup(move |app| {
+            // Initialize app data first
+            if let Err(e) = initialize_app_data() {
+                error!("Failed to initialize app data: {}", e);
+            }
+
+            // Clean up old log files (7+ days old)
+            logging::cleanup_old_logs();
+
             let current_version = app.package_info().version.to_string();
             let version_file = get_last_run_version_path();
             let last_version = fs::read_to_string(&version_file).unwrap_or_default();
@@ -173,7 +196,7 @@ pub fn run() {
             let _ = fs::write(&version_file, &current_version);
 
             if just_updated {
-                println!("App updated from {} to {} - bringing window to foreground", last_version.trim(), current_version);
+                info!("App updated from {} to {} - bringing window to foreground", last_version.trim(), current_version);
                 if let Some(window) = app.get_webview_window("main") {
                     let _ = window.show();
                     let _ = window.unminimize();
@@ -184,9 +207,9 @@ pub fn run() {
             let settings = get_settings().unwrap_or_default();
             if settings.discord_rich_presence_enabled {
                 if let Err(e) = discord_manager.connect() {
-                    eprintln!("Failed to connect to Discord: {}", e);
+                    warn!("Failed to connect to Discord: {}", e);
                 } else {
-                    println!("Discord Rich Presence connected");
+                    info!("Discord Rich Presence connected");
                 }
             }
 

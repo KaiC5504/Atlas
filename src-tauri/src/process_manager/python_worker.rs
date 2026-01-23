@@ -1,3 +1,4 @@
+use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
 use std::process::Stdio;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
@@ -70,7 +71,7 @@ fn is_valid_workers_dir(dir: &std::path::Path) -> bool {
                 .any(|e| e.path().extension().map_or(false, |ext| ext == "exe")))
             .unwrap_or(false);
 
-    println!("is_valid_workers_dir({:?}): has_common={}, has_dist={}, dist_exists={}",
+    debug!(target: "python_worker", "is_valid_workers_dir({:?}): has_common={}, has_dist={}, dist_exists={}",
         dir, has_common, has_dist, dist_dir.exists());
 
     has_common || has_dist
@@ -78,7 +79,7 @@ fn is_valid_workers_dir(dir: &std::path::Path) -> bool {
 
 pub fn get_workers_dir() -> std::path::PathBuf {
     if let Ok(exe_path) = std::env::current_exe() {
-        println!("Executable path: {:?}", exe_path);
+        debug!(target: "python_worker", "Executable path: {:?}", exe_path);
 
         if let Some(exe_dir) = exe_path.parent() {
             // First, search up the directory tree for development builds
@@ -87,10 +88,10 @@ pub fn get_workers_dir() -> std::path::PathBuf {
             for i in 0..5 {
                 if let Some(parent) = current.parent() {
                     let dev_workers_dir = parent.join("python_workers");
-                    println!("Checking for python_workers at: {:?} (level {})", dev_workers_dir, i);
+                    debug!(target: "python_worker", "Checking for python_workers at: {:?} (level {})", dev_workers_dir, i);
                     // Check for common module (indicates dev environment with source files)
                     if dev_workers_dir.join("common").join("__init__.py").exists() {
-                        println!("Found dev python_workers at: {:?}", dev_workers_dir);
+                        debug!(target: "python_worker", "Found dev python_workers at: {:?}", dev_workers_dir);
                         return dev_workers_dir;
                     }
                     current = parent;
@@ -102,7 +103,7 @@ pub fn get_workers_dir() -> std::path::PathBuf {
             // Then check next to exe (production/release builds)
             let workers_dir = exe_dir.join("python_workers");
             if workers_dir.exists() && is_valid_workers_dir(&workers_dir) {
-                println!("Found python_workers next to exe: {:?}", workers_dir);
+                debug!(target: "python_worker", "Found python_workers next to exe: {:?}", workers_dir);
                 return workers_dir;
             }
         }
@@ -112,7 +113,7 @@ pub fn get_workers_dir() -> std::path::PathBuf {
         .unwrap_or_default()
         .join("python_workers");
 
-    println!("Fallback to current dir python_workers: {:?}", cwd_workers);
+    debug!(target: "python_worker", "Fallback to current dir python_workers: {:?}", cwd_workers);
     cwd_workers
 }
 
@@ -129,35 +130,75 @@ fn is_ml_worker(script: &str) -> bool {
 
 pub fn find_worker_executable(script: &str) -> Result<WorkerExecutable, String> {
     let workers_dir = get_workers_dir();
-    println!("find_worker_executable: script={}, workers_dir={:?}", script, workers_dir);
-
     let base_name = script.trim_end_matches(".py");
 
-    let exe_path = workers_dir.join("dist").join(format!("{}.exe", base_name));
-    println!("  Checking exe: {:?} exists={}", exe_path, exe_path.exists());
-    if exe_path.exists() {
-        println!("Found compiled worker: {:?}", exe_path);
-        return Ok(WorkerExecutable::Exe(exe_path));
+    // In debug builds, prefer .py scripts for faster iteration (no need to compile)
+    // In release builds, prefer compiled .exe for better performance and no Python dependency
+    #[cfg(debug_assertions)]
+    {
+        debug!(target: "python_worker", "find_worker_executable (DEBUG): script={}, workers_dir={:?}", script, workers_dir);
+
+        // First try .py script (preferred in debug mode)
+        let script_path = workers_dir.join(script);
+        debug!(target: "python_worker", "  Checking script: {:?} exists={}", script_path, script_path.exists());
+        if script_path.exists() {
+            let python_path = get_python_path();
+            info!(target: "python_worker", "Using Python script (DEBUG mode): {:?} with {}", script_path, python_path);
+            return Ok(WorkerExecutable::Script {
+                python_path,
+                script_path
+            });
+        }
+
+        // Fall back to .exe if .py not found
+        let exe_path = workers_dir.join("dist").join(format!("{}.exe", base_name));
+        if exe_path.exists() {
+            debug!(target: "python_worker", "Found compiled worker (fallback): {:?}", exe_path);
+            return Ok(WorkerExecutable::Exe(exe_path));
+        }
+
+        let exe_path_direct = workers_dir.join(format!("{}.exe", base_name));
+        if exe_path_direct.exists() {
+            debug!(target: "python_worker", "Found compiled worker (fallback): {:?}", exe_path_direct);
+            return Ok(WorkerExecutable::Exe(exe_path_direct));
+        }
     }
 
-    let exe_path_direct = workers_dir.join(format!("{}.exe", base_name));
-    println!("  Checking exe direct: {:?} exists={}", exe_path_direct, exe_path_direct.exists());
-    if exe_path_direct.exists() {
-        println!("Found compiled worker: {:?}", exe_path_direct);
-        return Ok(WorkerExecutable::Exe(exe_path_direct));
+    // In release builds, prefer compiled .exe
+    #[cfg(not(debug_assertions))]
+    {
+        debug!(target: "python_worker", "find_worker_executable (RELEASE): script={}, workers_dir={:?}", script, workers_dir);
+
+        // First try .exe in dist folder
+        let exe_path = workers_dir.join("dist").join(format!("{}.exe", base_name));
+        debug!(target: "python_worker", "  Checking exe: {:?} exists={}", exe_path, exe_path.exists());
+        if exe_path.exists() {
+            debug!(target: "python_worker", "Found compiled worker: {:?}", exe_path);
+            return Ok(WorkerExecutable::Exe(exe_path));
+        }
+
+        // Then try .exe directly in workers dir
+        let exe_path_direct = workers_dir.join(format!("{}.exe", base_name));
+        debug!(target: "python_worker", "  Checking exe direct: {:?} exists={}", exe_path_direct, exe_path_direct.exists());
+        if exe_path_direct.exists() {
+            debug!(target: "python_worker", "Found compiled worker: {:?}", exe_path_direct);
+            return Ok(WorkerExecutable::Exe(exe_path_direct));
+        }
+
+        // Fall back to .py script if no .exe found
+        let script_path = workers_dir.join(script);
+        debug!(target: "python_worker", "  Checking script: {:?} exists={}", script_path, script_path.exists());
+        if script_path.exists() {
+            let python_path = get_python_path();
+            warn!(target: "python_worker", "Using Python script in RELEASE mode (no .exe found): {:?}", script_path);
+            return Ok(WorkerExecutable::Script {
+                python_path,
+                script_path
+            });
+        }
     }
 
-    let script_path = workers_dir.join(script);
-    println!("  Checking script: {:?} exists={}", script_path, script_path.exists());
-    if script_path.exists() {
-        let python_path = get_python_path();
-        println!("Using Python script (dev mode): {:?} with {}", script_path, python_path);
-        return Ok(WorkerExecutable::Script {
-            python_path,
-            script_path
-        });
-    }
-
+    // Worker not found
     if is_ml_worker(script) {
         return Err(format!(
             "This feature requires machine learning components that are not installed. \
@@ -168,9 +209,10 @@ pub fn find_worker_executable(script: &str) -> Result<WorkerExecutable, String> 
     }
 
     Err(format!(
-        "Worker not found: {} (checked {:?} and {:?})",
+        "Worker not found: {} (checked {:?}/dist/{}.exe and {:?})",
         script,
-        exe_path,
+        workers_dir,
+        base_name,
         workers_dir.join(script)
     ))
 }
@@ -182,7 +224,7 @@ pub async fn spawn_python_worker_async(
 ) -> Result<serde_json::Value, String> {
     let worker_exec = find_worker_executable(script)?;
 
-    println!("Spawning worker: {:?}", worker_exec);
+    info!(target: "python_worker", "Spawning worker: {:?}", worker_exec);
 
     let mut cmd = match &worker_exec {
         WorkerExecutable::Exe(exe_path) => {
@@ -226,13 +268,25 @@ pub async fn spawn_python_worker_async(
         .take()
         .ok_or("Failed to capture stdout")?;
 
+    // Capture stderr in a separate task
+    let stderr = child.stderr.take().ok_or("Failed to capture stderr")?;
+    let script_name = script.to_string();
+    let stderr_handle = tokio::spawn(async move {
+        let mut stderr_reader = BufReader::new(stderr).lines();
+        while let Ok(Some(line)) = stderr_reader.next_line().await {
+            if !line.trim().is_empty() {
+                warn!(target: "python_worker", "[{}] stderr: {}", script_name, line);
+            }
+        }
+    });
+
     let mut reader = BufReader::new(stdout).lines();
     let mut last_result: Option<serde_json::Value> = None;
     let mut last_error: Option<String> = None;
 
     while let Ok(Some(line)) = reader.next_line().await {
         if line.len() > 10000 {
-            println!("[Python worker] Received large line: {} bytes", line.len());
+            debug!(target: "python_worker", "Received large line: {} bytes", line.len());
         }
 
         if let Ok(message) = serde_json::from_str::<WorkerMessage>(&line) {
@@ -243,29 +297,34 @@ pub async fn spawn_python_worker_async(
                     }
                 }
                 WorkerMessage::Result { data } => {
-                    println!("[Python worker] Received result data");
+                    debug!(target: "python_worker", "Received result data");
                     last_result = Some(data.clone());
                 }
                 WorkerMessage::Error { message } => {
                     last_error = Some(message.clone());
                 }
                 WorkerMessage::Log { level, message } => {
-                    if level != "stdout" && level != "stderr" {
-                        println!("[Python {}] {}", level, message);
-                    }
-                    if level == "stdout" || level == "stderr" {
-                        if let Some(ref tx) = progress_callback {
-                            let _ = tx.send(WorkerMessage::Log {
-                                level: level.clone(),
-                                message: message.clone(),
-                            }).await;
+                    // Forward Python log messages to the log file
+                    match level.as_str() {
+                        "error" => error!(target: "python_worker", "[{}] {}", script, message),
+                        "warning" => warn!(target: "python_worker", "[{}] {}", script, message),
+                        "debug" => debug!(target: "python_worker", "[{}] {}", script, message),
+                        "stdout" | "stderr" => {
+                            // Forward to UI callback but don't spam the log
+                            if let Some(ref tx) = progress_callback {
+                                let _ = tx.send(WorkerMessage::Log {
+                                    level: level.clone(),
+                                    message: message.clone(),
+                                }).await;
+                            }
                         }
+                        _ => info!(target: "python_worker", "[{}] {}", script, message),
                     }
                 }
             }
         } else {
             if !line.trim().is_empty() {
-                println!("[Python] Failed to parse as WorkerMessage ({} bytes): {}",
+                debug!(target: "python_worker", "Raw output ({} bytes): {}",
                     line.len(),
                     if line.len() > 200 { &line[..200] } else { &line }
                 );
@@ -273,7 +332,10 @@ pub async fn spawn_python_worker_async(
         }
     }
 
-    println!("[Python worker] Finished reading stdout, result present: {}", last_result.is_some());
+    // Wait for stderr task to complete
+    let _ = stderr_handle.await;
+
+    debug!(target: "python_worker", "Finished reading stdout, result present: {}", last_result.is_some());
 
     let status = child
         .wait()
@@ -281,7 +343,7 @@ pub async fn spawn_python_worker_async(
         .map_err(|e| format!("Failed to wait for process: {}", e))?;
 
     let exit_code = status.code().unwrap_or(-1);
-    println!("Python worker exited with code: {}", exit_code);
+    info!(target: "python_worker", "Worker exited with code: {}", exit_code);
 
     if let Some(error) = last_error {
         return Err(error);

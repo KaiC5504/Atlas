@@ -1,3 +1,4 @@
+use log::{debug, warn};
 use nvml_wrapper::Nvml;
 use std::collections::HashMap;
 use std::sync::RwLock;
@@ -27,9 +28,9 @@ impl GpuProcessTracker {
     pub fn new() -> Self {
         let nvml = Nvml::init().ok();
         if nvml.is_some() {
-            println!("GpuProcessTracker: NVML initialized successfully");
+            debug!("GpuProcessTracker: NVML initialized successfully");
         } else {
-            println!("GpuProcessTracker: NVML not available, GPU tracking disabled");
+            debug!("GpuProcessTracker: NVML not available, GPU tracking disabled");
         }
 
         Self {
@@ -52,7 +53,7 @@ impl GpuProcessTracker {
         let device = match nvml.device_by_index(0) {
             Ok(d) => d,
             Err(e) => {
-                eprintln!("GpuProcessTracker: Failed to get GPU device: {}", e);
+                warn!("GpuProcessTracker: Failed to get GPU device: {}", e);
                 return;
             }
         };

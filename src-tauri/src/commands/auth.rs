@@ -2,6 +2,7 @@
 use crate::file_manager::{read_json_file, write_json_file};
 use crate::models::{AuthStatus, RiotAuthCookies, Settings, ValorantCredentials};
 use crate::utils::{get_auth_json_path, get_settings_json_path};
+use log::{debug, info, warn};
 use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 use url::Url;
 
@@ -31,7 +32,7 @@ pub async fn open_auth_window(app: AppHandle) -> Result<(), String> {
     .build()
     .map_err(|e| format!("Failed to create auth window: {}", e))?;
 
-    println!("Auth window opened");
+    debug!("Auth window opened");
 
     Ok(())
 }
@@ -58,7 +59,7 @@ pub async fn capture_auth_cookies(app: AppHandle) -> Result<bool, String> {
         let name = cookie.name();
         let value = cookie.value().to_string();
 
-        println!("Found cookie: {} = {}...", name, &value[..std::cmp::min(10, value.len())]);
+        debug!("Found cookie: {} = {}...", name, &value[..std::cmp::min(10, value.len())]);
 
         match name {
             "tdid" => auth_cookies.tdid = Some(value),
@@ -72,7 +73,7 @@ pub async fn capture_auth_cookies(app: AppHandle) -> Result<bool, String> {
 
     // Check if we have minimum required cookies
     if !auth_cookies.is_complete() {
-        println!("Not all required cookies captured yet");
+        debug!("Not all required cookies captured yet");
         return Ok(false);
     }
 
@@ -87,14 +88,14 @@ pub async fn capture_auth_cookies(app: AppHandle) -> Result<bool, String> {
         update_settings_puuid(puuid)?;
     }
 
-    println!(
+    info!(
         "Auth cookies saved. Full auth: {}",
         auth_cookies.has_full_auth()
     );
 
     // Close auth window
     if let Err(e) = auth_window.close() {
-        eprintln!("Failed to close auth window: {}", e);
+        warn!("Failed to close auth window: {}", e);
     }
 
     // Emit success event

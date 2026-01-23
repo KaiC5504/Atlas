@@ -1,3 +1,4 @@
+use log::debug;
 use parking_lot::RwLock;
 use serde::{de::DeserializeOwned, Serialize};
 use std::collections::HashMap;
@@ -73,7 +74,7 @@ pub fn write_json_file<T: Serialize>(path: &Path, data: &T) -> Result<(), String
 
 pub fn initialize_json_file<T: Serialize>(path: &Path, default: &T) -> Result<(), String> {
     if !path.exists() {
-        println!("Initializing JSON file: {:?}", path);
+        debug!("Initializing JSON file: {:?}", path);
         write_json_file(path, default)?;
     }
     Ok(())

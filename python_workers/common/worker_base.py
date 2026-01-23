@@ -21,6 +21,8 @@ class WorkerBase(ABC):
     3. Write result to stdout (or error on failure)
     """
 
+    _has_run = False  # Class-level flag to prevent multiple runs
+
     def __init__(self):
         self.input_data: Dict[str, Any] = {}
 
@@ -61,10 +63,25 @@ class WorkerBase(ABC):
         Returns:
             Exit code (0 for success, 1 for failure)
         """
+        import os
+
+        # Prevent multiple runs in the same process
+        if WorkerBase._has_run:
+            write_log(f"WARNING: Worker.run() called multiple times! Ignoring.", level="warning")
+            return 1
+        WorkerBase._has_run = True
+
         try:
+            # Log process info for debugging
+            write_log(f"Worker PID: {os.getpid()}, Parent PID: {os.getppid()}")
+
             # Read input from stdin
             self.input_data = read_input()
             write_log(f"Worker started with input: {list(self.input_data.keys())}")
+
+            # Check for empty input (likely a subprocess issue)
+            if not self.input_data:
+                write_log("WARNING: Empty input received - this may be a subprocess that shouldn't be running", level="warning")
 
             # Validate input
             self.validate_input(self.input_data)

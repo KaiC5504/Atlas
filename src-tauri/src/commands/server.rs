@@ -9,6 +9,7 @@ use crate::utils::{
     get_quick_actions_json_path, get_server_config_json_path, get_ssh_credentials_json_path,
 };
 use chrono::Utc;
+use log::debug;
 use serde::Deserialize;
 use serde_json::json;
 use tauri::{AppHandle, Emitter};
@@ -60,7 +61,7 @@ pub fn update_server_config(config: UpdateServerConfigParams) -> Result<ServerCo
     }
 
     write_json_file(&path, &current_config)?;
-    println!("Updated server config: {:?}", current_config);
+    debug!("Updated server config: {:?}", current_config);
 
     Ok(current_config)
 }
@@ -76,7 +77,7 @@ pub fn save_ssh_credentials(password: String) -> Result<(), String> {
     };
 
     write_json_file(&path, &credentials)?;
-    println!("SSH credentials saved");
+    debug!("SSH credentials saved");
 
     Ok(())
 }
@@ -109,7 +110,7 @@ pub fn clear_ssh_credentials() -> Result<(), String> {
     if path.exists() {
         std::fs::remove_file(&path)
             .map_err(|e| format!("Failed to delete credentials file: {}", e))?;
-        println!("SSH credentials cleared");
+        debug!("SSH credentials cleared");
     }
 
     Ok(())
@@ -170,7 +171,7 @@ pub async fn execute_ssh_command(
         "session_id": session_id
     });
 
-    println!(
+    debug!(
         "Executing SSH command on {}@{}: {}",
         server_config.username, server_config.host, command
     );
@@ -295,7 +296,7 @@ pub async fn get_system_status(
         "action": "system_status"
     });
 
-    println!(
+    debug!(
         "Getting system status from {}@{}",
         server_config.username, server_config.host
     );
@@ -409,7 +410,7 @@ pub async fn upload_file_to_server(
         "session_id": session_id
     });
 
-    println!(
+    debug!(
         "Uploading file via SFTP: {} -> {}@{}:{}",
         local_path, server_config.username, server_config.host, remote_path
     );

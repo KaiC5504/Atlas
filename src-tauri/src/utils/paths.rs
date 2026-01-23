@@ -1,3 +1,4 @@
+use log::info;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::OnceLock;
@@ -164,10 +165,10 @@ pub fn initialize_data_directories() -> Result<(), String> {
             fs::create_dir_all(dir).map_err(|e| {
                 format!("Failed to create directory {:?}: {}", dir, e)
             })?;
-            println!("Created directory: {:?}", dir);
+            info!("Created directory: {:?}", dir);
         }
     }
 
-    println!("Data directories initialized at: {:?}", get_app_data_dir());
+    info!("Data directories initialized at: {:?}", get_app_data_dir());
     Ok(())
 }

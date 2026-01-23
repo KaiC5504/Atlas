@@ -1,6 +1,7 @@
 // Icon extractor for game executables
 // Extracts icons from .exe files on Windows using PowerShell
 
+use log::warn;
 use std::io::Read;
 use std::path::Path;
 use std::process::Command;
@@ -20,7 +21,7 @@ pub fn extract_icon_from_exe(exe_path: &Path, output_dir: &Path) -> Option<Strin
 
     // Ensure output directory exists - log if it fails
     if let Err(e) = fs::create_dir_all(output_dir) {
-        eprintln!("[Icon Extractor] Failed to create directory {:?}: {}", output_dir, e);
+        warn!("[Icon Extractor] Failed to create directory {:?}: {}", output_dir, e);
         return None;
     }
 
@@ -35,7 +36,7 @@ pub fn extract_icon_from_exe(exe_path: &Path, output_dir: &Path) -> Option<Strin
 
     // Check if exe exists
     if !exe_path.exists() {
-        eprintln!("[Icon Extractor] Exe not found: {:?}", exe_path);
+        warn!("[Icon Extractor] Exe not found: {:?}", exe_path);
         return None;
     }
 
@@ -88,12 +89,12 @@ try {{
             }
             if !output.status.success() {
                 let stderr = String::from_utf8_lossy(&output.stderr);
-                eprintln!("[Icon Extractor] Simple method failed: {}", stderr);
+                warn!("[Icon Extractor] Simple method failed: {}", stderr);
             }
             None
         }
         Err(e) => {
-            eprintln!("[Icon Extractor] PowerShell execution failed: {}", e);
+            warn!("[Icon Extractor] PowerShell execution failed: {}", e);
             None
         }
     }
@@ -224,13 +225,13 @@ if ($icon) {{
             } else {
                 let stderr = String::from_utf8_lossy(&output.stderr);
                 if !stderr.is_empty() {
-                    eprintln!("[Icon Extractor] Advanced method failed: {}", stderr);
+                    warn!("[Icon Extractor] Advanced method failed: {}", stderr);
                 }
                 None
             }
         }
         Err(e) => {
-            eprintln!("[Icon Extractor] PowerShell execution failed: {}", e);
+            warn!("[Icon Extractor] PowerShell execution failed: {}", e);
             None
         }
     }

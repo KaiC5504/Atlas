@@ -1,3 +1,4 @@
+use log::{debug, info};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -78,7 +79,7 @@ impl GamingSessionManager {
         // Start metrics recording
         self.start_recording(session.clone());
 
-        println!("Started gaming session: {} ({})", game_name, session_id);
+        info!("Started gaming session: {} ({})", game_name, session_id);
         Ok(session)
     }
 
@@ -168,7 +169,7 @@ impl GamingSessionManager {
                 thread::sleep(Duration::from_secs(1));
             }
 
-            println!("Session recording stopped");
+            debug!("Session recording stopped");
         });
     }
 
@@ -266,7 +267,7 @@ impl GamingSessionManager {
             // Reset Discord to idle presence
             let _ = self.discord.set_idle_presence();
 
-            println!("Ended gaming session: {} ({})", session.game_name, session.id);
+            info!("Ended gaming session: {} ({})", session.game_name, session.id);
             return Ok(session);
         }
 

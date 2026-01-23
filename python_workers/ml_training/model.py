@@ -196,7 +196,8 @@ def export_to_onnx(
     model: nn.Module,
     output_path: str,
     input_shape: Tuple[int, int, int, int] = (1, 1, 128, 32),
-    opset_version: int = 11
+    opset_version: int = None,
+    log_fn=None
 ) -> None:
     """
     Export trained PyTorch model to ONNX format.
@@ -210,8 +211,20 @@ def export_to_onnx(
         model: Trained PyTorch model (outputs logits)
         output_path: Path to save ONNX model
         input_shape: Input tensor shape (batch, channels, n_mels, time_frames)
-        opset_version: ONNX opset version
+        opset_version: ONNX opset version (None = use latest supported)
+        log_fn: Optional logging function (default: print)
     """
+    if log_fn is None:
+        log_fn = print  # Default for CLI
+
+    # Use latest supported opset version if not specified
+    # PyTorch's torch.onnx.export() supports up to opset 20
+    MAX_PYTORCH_OPSET = 20
+    if opset_version is None:
+        import onnx
+        onnx_opset = onnx.defs.onnx_opset_version()
+        opset_version = min(onnx_opset, MAX_PYTORCH_OPSET)
+        log_fn(f"Using ONNX opset version: {opset_version} (ONNX lib supports {onnx_opset}, PyTorch supports up to {MAX_PYTORCH_OPSET})")
     # Move model to CPU for ONNX export (ONNX is device-agnostic)
     model_cpu = model.cpu()
 
@@ -237,22 +250,26 @@ def export_to_onnx(
         do_constant_folding=True
     )
 
-    print(f"Model exported to ONNX: {output_path}")
+    log_fn(f"Model exported to ONNX: {output_path}")
 
 
-def verify_onnx_model(onnx_path: str, torch_model: nn.Module) -> bool:
+def verify_onnx_model(onnx_path: str, torch_model: nn.Module, log_fn=None) -> bool:
     """
     Verify that ONNX model produces same outputs as PyTorch model.
 
     Args:
         onnx_path: Path to ONNX model
         torch_model: Original PyTorch model (outputs logits)
+        log_fn: Optional logging function (default: print)
 
     Returns:
         True if outputs match within tolerance
     """
     import onnxruntime as ort
     import numpy as np
+
+    if log_fn is None:
+        log_fn = print  # Default for CLI
 
     # Wrap model with sigmoid to match ONNX output
     model_with_sigmoid = ModelWithSigmoid(torch_model)
@@ -277,9 +294,9 @@ def verify_onnx_model(onnx_path: str, torch_model: nn.Module) -> bool:
     is_close = max_diff < 1e-5
 
     if is_close:
-        print(f"ONNX verification passed (max diff: {max_diff:.2e})")
+        log_fn(f"ONNX verification passed (max diff: {max_diff:.2e})")
     else:
-        print(f"ONNX verification FAILED (max diff: {max_diff:.2e})")
+        log_fn(f"ONNX verification FAILED (max diff: {max_diff:.2e})")
 
     return is_close
 

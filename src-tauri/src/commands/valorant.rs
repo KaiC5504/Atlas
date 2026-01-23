@@ -4,6 +4,7 @@ use crate::models::{RiotAuthCookies, ValorantItem, ValorantStore};
 use crate::process_manager::spawn_python_worker_async;
 use crate::utils::{get_auth_json_path, get_valorant_store_json_path};
 use chrono::{FixedOffset, TimeZone, Timelike, Utc};
+use log::debug;
 
 /// Get the start time of the current store rotation (8AM GMT+8)
 /// Store resets at 8AM GMT+8 daily, so each rotation is 8AM to next 8AM
@@ -59,7 +60,7 @@ pub fn should_auto_refresh_store() -> Result<bool, String> {
     // If last check was before the current rotation started, need to refresh
     let should_refresh = last_checked < rotation_start;
 
-    println!(
+    debug!(
         "Auto-refresh check: last_checked={}, rotation_start={}, should_refresh={}",
         last_checked, rotation_start, should_refresh
     );
@@ -87,7 +88,7 @@ pub fn get_valorant_store() -> Result<Option<ValorantStore>, String> {
 pub async fn check_valorant_store(region: Option<String>) -> Result<ValorantStore, String> {
     let region = region.unwrap_or_else(|| "na".to_string());
 
-    println!("Checking Valorant store for region: {}", region);
+    debug!("Checking Valorant store for region: {}", region);
 
     // Get stored auth cookies (run blocking file I/O on spawn_blocking)
     let auth_path = get_auth_json_path();
@@ -184,7 +185,7 @@ pub async fn check_valorant_store(region: Option<String>) -> Result<ValorantStor
         }
 
         write_json_file(&path, &stores)?;
-        println!("Valorant store checked and saved");
+        debug!("Valorant store checked and saved");
         Ok(())
     })
     .await

@@ -1,3 +1,26 @@
+# Early exit for subprocess re-execution - MUST BE FIRST
+# This prevents subprocesses from blocking on stdin or initializing CUDA
+import sys
+import os
+
+# Check multiple indicators to detect subprocess re-execution
+_is_subprocess = (
+    os.environ.get('ATLAS_WORKER_RUNNING') or
+    os.environ.get('TORCH_MULTIPROCESSING_WORKER') or
+    # Check if this looks like a multiprocessing spawn
+    len(sys.argv) > 1 and '--multiprocessing-fork' in ' '.join(sys.argv)
+)
+
+if _is_subprocess:
+    # Debug: Log to stderr that we caught a subprocess
+    print(f"[model_enhancer] Subprocess detected, exiting. ATLAS_WORKER_RUNNING={os.environ.get('ATLAS_WORKER_RUNNING')}, argv={sys.argv}", file=sys.stderr)
+    sys.exit(0)
+
+# Mark this process as the worker so any child processes will exit early
+os.environ['ATLAS_WORKER_RUNNING'] = '1'
+# Also set the PyTorch multiprocessing marker to be extra safe
+os.environ['TORCH_MULTIPROCESSING_WORKER'] = '1'
+
 """
 Model Enhancer Worker
 
@@ -26,7 +49,7 @@ Output (JSON via stdout):
   }
 }
 """
-import sys
+import multiprocessing
 from pathlib import Path
 from typing import Dict, Any
 import tempfile
@@ -265,7 +288,38 @@ class ModelEnhancer(WorkerBase):
                 write_log(f"Training from scratch: epochs={epochs}, lr={learning_rate}", "info")
 
             # Import and run training
-            from ml_training.train import train_model_with_progress
+            from ml_training.train import train_model_with_progress, set_worker_mode
+
+            # Enable worker mode to disable tqdm and use proper logging
+            set_worker_mode(enabled=True, log_fn=write_log)
+
+            # ============================================================
+            # CUDA/GPU STATUS - VERY IMPORTANT FOR TRAINING PERFORMANCE
+            # ============================================================
+            import torch
+            write_log("=" * 60, "info")
+            write_log("HARDWARE ACCELERATION STATUS", "info")
+            write_log("=" * 60, "info")
+
+            if torch.cuda.is_available():
+                gpu_name = torch.cuda.get_device_name(0)
+                gpu_memory = torch.cuda.get_device_properties(0).total_memory / (1024**3)
+                cuda_version = torch.version.cuda
+                write_log(f">>> USING: GPU (CUDA) <<<", "info")
+                write_log(f"    GPU Device: {gpu_name}", "info")
+                write_log(f"    GPU Memory: {gpu_memory:.1f} GB", "info")
+                write_log(f"    CUDA Version: {cuda_version}", "info")
+                write_log(f"    PyTorch CUDA: {torch.version.cuda}", "info")
+            else:
+                write_log(f">>> USING: CPU (NO GPU ACCELERATION) <<<", "info")
+                write_log(f"    WARNING: Training will be MUCH slower without GPU!", "info")
+                write_log(f"    torch.cuda.is_available() = False", "info")
+                write_log(f"    Possible reasons:", "info")
+                write_log(f"      - PyTorch CPU-only version installed", "info")
+                write_log(f"      - CUDA drivers not installed", "info")
+                write_log(f"      - No compatible NVIDIA GPU", "info")
+
+            write_log("=" * 60, "info")
 
             def progress_callback(epoch, total_epochs, metrics):
                 percent = 30 + int((epoch / total_epochs) * 65)  # 30-95%
@@ -273,6 +327,7 @@ class ModelEnhancer(WorkerBase):
                 stage = f"{mode_str} - Epoch {epoch}/{total_epochs}"
                 if metrics:
                     stage += f" - F1: {metrics.get('f1', 0):.4f}, Acc: {metrics.get('accuracy', 0):.4f}"
+                write_log(f"Progress callback: {stage}", "info")
                 write_progress(percent, stage)
 
             # Build fine-tuning config if we have a pretrained model
@@ -284,16 +339,31 @@ class ModelEnhancer(WorkerBase):
                     'unfreeze_after': unfreeze_after,
                 }
 
-            result = train_model_with_progress(
-                str(temp_dir),
-                model_output_path,
-                progress_callback,
-                config_overrides={
-                    'epochs': epochs,
-                    'learning_rate': learning_rate,
-                },
-                fine_tuning=fine_tuning_config
-            )
+            write_log("=" * 60, "info")
+            write_log("CALLING train_model_with_progress", "info")
+            write_log(f"  temp_dir: {temp_dir}", "info")
+            write_log(f"  model_output_path: {model_output_path}", "info")
+            write_log(f"  epochs: {epochs}, learning_rate: {learning_rate}", "info")
+            write_log(f"  fine_tuning_config: {fine_tuning_config}", "info")
+            write_log("=" * 60, "info")
+
+            try:
+                result = train_model_with_progress(
+                    str(temp_dir),
+                    model_output_path,
+                    progress_callback,
+                    config_overrides={
+                        'epochs': epochs,
+                        'learning_rate': learning_rate,
+                    },
+                    fine_tuning=fine_tuning_config
+                )
+                write_log(f"train_model_with_progress returned: {result}", "info")
+            except Exception as e:
+                write_log(f"ERROR in train_model_with_progress: {type(e).__name__}: {e}", "error")
+                import traceback
+                write_log(f"Traceback:\n{traceback.format_exc()}", "error")
+                raise
 
             write_progress(100, "Training complete!")
 
@@ -387,5 +457,20 @@ class ModelEnhancer(WorkerBase):
 
 
 if __name__ == '__main__':
+    # Required for Windows multiprocessing support
+    multiprocessing.freeze_support()
+
+    # Debug: Log startup information
+    print(f'{{"type": "log", "level": "debug", "message": "model_enhancer main starting: argv={sys.argv}, pid={os.getpid()}"}}', flush=True)
+
+    # Set multiprocessing start method before any multiprocessing is used
+    # On Windows, 'spawn' is already default, but be explicit
+    try:
+        if sys.platform == 'win32':
+            multiprocessing.set_start_method('spawn', force=True)
+    except RuntimeError:
+        # Already set, which is fine
+        pass
+
     worker = ModelEnhancer()
     sys.exit(worker.run())

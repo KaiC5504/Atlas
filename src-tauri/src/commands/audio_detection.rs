@@ -9,6 +9,7 @@ use crate::models::{
 use crate::process_manager::{spawn_python_worker_async, WorkerMessage};
 use crate::utils::{get_audio_detection_jobs_json_path, get_feedback_sessions_json_path, get_models_dir};
 use base64::{engine::general_purpose::STANDARD, Engine};
+use log::debug;
 use std::path::Path;
 use std::process::Command;
 use tauri::{AppHandle, Emitter};
@@ -64,7 +65,7 @@ pub fn submit_audio_detection_job(
     // Write back to file
     write_json_file(&path, &jobs)?;
 
-    println!(
+    debug!(
         "Submitted audio detection job: {} with config: {:?}",
         input_file, config
     );
@@ -255,7 +256,7 @@ pub fn cancel_audio_detection_job(job_id: String) -> Result<(), String> {
 
     write_json_file(&path, &jobs)?;
 
-    println!("Cancelled audio detection job: {}", job_id);
+    debug!("Cancelled audio detection job: {}", job_id);
     Ok(())
 }
 
@@ -279,7 +280,7 @@ pub fn delete_audio_detection_job(job_id: String) -> Result<(), String> {
             jobs.remove(index);
             write_json_file(&path, &jobs)?;
 
-            println!("Deleted audio detection job: {}", job_id);
+            debug!("Deleted audio detection job: {}", job_id);
             Ok(())
         }
         None => Err(format!("Audio detection job not found: {}", job_id)),
@@ -503,7 +504,7 @@ pub async fn start_model_training(
                     );
                 }
                 WorkerMessage::Log { level, message } => {
-                    println!("[Training {}] {}", level, message);
+                    debug!("[Training {}] {}", level, message);
                     // Parse metrics from log messages if present
                     if message.contains("F1:") || message.contains("Accuracy:") {
                         let _ = progress_app.emit(

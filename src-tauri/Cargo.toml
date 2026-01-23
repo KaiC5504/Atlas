@@ -40,6 +40,9 @@ ureq = "2"
 # Discord Rich Presence
 discord-rich-presence = "1.0"
 tauri-plugin-mcp-bridge = "0.8"
+# Logging
+tauri-plugin-log = "2"
+log = "0.4"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59", features = ["Win32_System_Threading", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging", "Win32_Foundation", "Win32_Storage_FileSystem"] }

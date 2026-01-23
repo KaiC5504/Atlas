@@ -2,6 +2,7 @@ use crate::file_manager::{read_json_file, write_json_file};
 use crate::models::{Download, DownloadStatus, Settings};
 use crate::process_manager::{spawn_python_worker_async, WorkerMessage};
 use crate::utils::{get_downloads_json_path, get_settings_json_path, get_videos_dir};
+use log::debug;
 use parking_lot::RwLock;
 use serde::Serialize;
 use std::fs;
@@ -296,7 +297,7 @@ pub fn add_download(url: String, quality: String) -> Result<serde_json::Value, S
     write_json_file(&path, &downloads)?;
     DOWNLOADS_CACHE.write().invalidate();
 
-    println!("Added download: {} with quality: {}", url, quality);
+    debug!("Added download: {} with quality: {}", url, quality);
 
     Ok(serde_json::json!({ "job_id": job_id }))
 }
@@ -533,7 +534,7 @@ pub fn cancel_download(job_id: String) -> Result<(), String> {
     write_json_file(&path, &downloads)?;
     DOWNLOADS_CACHE.write().invalidate();
 
-    println!("Cancelled download: {}", job_id);
+    debug!("Cancelled download: {}", job_id);
     Ok(())
 }
 
@@ -561,7 +562,7 @@ pub fn delete_download(job_id: String, delete_file: bool) -> Result<(), String> 
                     if std::path::Path::new(file_path).exists() {
                         fs::remove_file(file_path)
                             .map_err(|e| format!("Failed to delete file: {}", e))?;
-                        println!("Deleted file: {}", file_path);
+                        debug!("Deleted file: {}", file_path);
                     }
                 }
             }
@@ -571,7 +572,7 @@ pub fn delete_download(job_id: String, delete_file: bool) -> Result<(), String> 
             write_json_file(&path, &downloads)?;
             DOWNLOADS_CACHE.write().invalidate();
 
-            println!("Deleted download: {}", job_id);
+            debug!("Deleted download: {}", job_id);
             Ok(())
         }
         None => Err(format!("Download not found: {}", job_id)),

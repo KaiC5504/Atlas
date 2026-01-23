@@ -2,6 +2,7 @@ use crate::file_manager::{read_json_file, write_json_file};
 use crate::models::{MLJob, MLJobStatus, Model, OutputFile};
 use crate::process_manager::{spawn_python_worker_async, WorkerMessage};
 use crate::utils::{get_ml_jobs_json_path, get_models_dir, get_separated_audio_dir};
+use log::debug;
 use std::fs;
 use std::path::Path;
 use std::time::{Duration, Instant};
@@ -58,7 +59,7 @@ pub fn submit_ml_job(
     // Write back to file
     write_json_file(&path, &jobs)?;
 
-    println!(
+    debug!(
         "Submitted ML job: {} with model: {}, output_dir: {:?}",
         input_file, model, output_dir
     );
@@ -255,7 +256,7 @@ pub fn cancel_ml_job(job_id: String) -> Result<(), String> {
 
     write_json_file(&path, &jobs)?;
 
-    println!("Cancelled ML job: {}", job_id);
+    debug!("Cancelled ML job: {}", job_id);
     Ok(())
 }
 
@@ -322,9 +323,9 @@ pub fn delete_ml_job(job_id: String, delete_output: bool) -> Result<(), String> 
                     for file in output_files {
                         if Path::new(&file.path).exists() {
                             if let Err(e) = fs::remove_file(&file.path) {
-                                println!("Warning: Failed to delete file {}: {}", file.path, e);
+                                debug!("Warning: Failed to delete file {}: {}", file.path, e);
                             } else {
-                                println!("Deleted output file: {}", file.path);
+                                debug!("Deleted output file: {}", file.path);
                             }
                         }
                     }
@@ -335,7 +336,7 @@ pub fn delete_ml_job(job_id: String, delete_output: bool) -> Result<(), String> 
             jobs.remove(index);
             write_json_file(&path, &jobs)?;
 
-            println!("Deleted ML job: {}", job_id);
+            debug!("Deleted ML job: {}", job_id);
             Ok(())
         }
         None => Err(format!("ML job not found: {}", job_id)),

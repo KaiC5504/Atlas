@@ -2,6 +2,7 @@
 use crate::file_manager::{read_json_file, write_json_file};
 use crate::models::Settings;
 use crate::utils::get_settings_json_path;
+use log::debug;
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
@@ -107,7 +108,7 @@ pub fn update_settings(settings: UpdateSettingsParams) -> Result<Settings, Strin
 
     write_json_file(&path, &current_settings)?;
 
-    println!("Updated settings: {:?}", current_settings);
+    debug!("Updated settings: {:?}", current_settings);
 
     Ok(current_settings)
 }

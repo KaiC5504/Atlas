@@ -13,6 +13,7 @@
     "autostart:allow-enable",
     "autostart:allow-disable",
     "autostart:allow-is-enabled",
-    "mcp-bridge:default"
+    "mcp-bridge:default",
+    "log:default"
   ]
 }

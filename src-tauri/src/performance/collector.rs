@@ -1,11 +1,12 @@
 // Performance data collector
 use crate::models::performance::{CpuMetrics, GpuMetrics, RamMetrics, SystemMetrics};
 use super::gpu::NvidiaGpu;
-use sysinfo::{CpuRefreshKind, MemoryRefreshKind, RefreshKind, System};
+use log::{debug, info, warn};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread;
 use std::time::Duration;
+use sysinfo::{CpuRefreshKind, MemoryRefreshKind, RefreshKind, System};
 use tauri::{AppHandle, Emitter};
 
 /// State for tracking if monitoring is active
@@ -84,9 +85,9 @@ impl PerformanceCollector {
         // Try to initialize NVIDIA GPU (will be None if not available)
         let nvidia_gpu = NvidiaGpu::new().ok();
         if nvidia_gpu.is_some() {
-            println!("NVIDIA GPU detected and initialized");
+            debug!("NVIDIA GPU detected and initialized");
         } else {
-            println!("No NVIDIA GPU detected or NVML not available");
+            debug!("No NVIDIA GPU detected or NVML not available");
         }
 
         Self {
@@ -172,13 +173,13 @@ impl PerformanceCollector {
 pub fn start_monitoring(app: AppHandle, state: Arc<MonitoringState>, shared_metrics: Arc<SharedMetrics>) {
     // Check if already running
     if state.is_running.load(Ordering::SeqCst) {
-        println!("Performance monitoring is already running");
+        debug!("Performance monitoring is already running");
         return;
     }
 
     // Set running flag
     state.is_running.store(true, Ordering::SeqCst);
-    println!("Starting performance monitoring...");
+    info!("Starting performance monitoring...");
 
     let is_running = state.is_running.clone();
 
@@ -194,9 +195,9 @@ pub fn start_monitoring(app: AppHandle, state: Arc<MonitoringState>, shared_metr
             unsafe {
                 let result = SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL);
                 if result == 0 {
-                    eprintln!("Warning: Failed to set monitoring thread to below-normal priority");
+                    warn!("Failed to set monitoring thread to below-normal priority");
                 } else {
-                    println!("Monitoring thread priority set to BELOW_NORMAL");
+                    debug!("Monitoring thread priority set to BELOW_NORMAL");
                 }
             }
         }
@@ -216,20 +217,20 @@ pub fn start_monitoring(app: AppHandle, state: Arc<MonitoringState>, shared_metr
 
             // Emit event to frontend
             if let Err(e) = app.emit("performance:update", &metrics) {
-                eprintln!("Failed to emit performance update: {}", e);
+                warn!("Failed to emit performance update: {}", e);
             }
 
             // Wait 1 second before next collection
             thread::sleep(Duration::from_secs(1));
         }
 
-        println!("Performance monitoring stopped");
+        debug!("Performance monitoring stopped");
     });
 }
 
 /// Stop performance monitoring
 pub fn stop_monitoring(state: Arc<MonitoringState>) {
-    println!("Stopping performance monitoring...");
+    debug!("Stopping performance monitoring...");
     state.is_running.store(false, Ordering::SeqCst);
 }
 

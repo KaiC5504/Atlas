@@ -6,6 +6,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { Sidebar } from './components/Sidebar';
 import { UpdateToast } from './components/UpdateToast';
 import { DefaultRouteRedirect } from './components/DefaultRouteRedirect';
+import { useErrorLogger } from './hooks/useErrorLogger';
 import { Dashboard } from './views/Dashboard';
 import { DownloadQueue } from './views/DownloadQueue';
 import { MLProcessor } from './views/MLProcessor';
@@ -22,6 +23,9 @@ import { NavigationSettingsProvider } from './contexts';
 import './App.css';
 
 function App() {
+  // Capture frontend errors and forward to log file
+  useErrorLogger();
+
   const { state, checkForUpdate, downloadUpdate, installUpdate, dismissUpdate } = useUpdater();
   const navigate = useNavigate();
 

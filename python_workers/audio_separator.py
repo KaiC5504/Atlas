@@ -1,11 +1,17 @@
 #!/usr/bin/env python3
+# Early exit for subprocess re-execution - MUST BE FIRST
+# This prevents subprocesses from blocking on stdin or initializing CUDA
+import sys
+import os
+if os.environ.get('ATLAS_WORKER_RUNNING'):
+    sys.exit(0)
+os.environ['ATLAS_WORKER_RUNNING'] = '1'
+
 """
 Audio separation worker using Demucs.
 Receives job parameters from Rust via stdin, separates audio stems,
 and reports progress/result back via stdout.
 """
-import os
-import sys
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -240,4 +246,7 @@ class AudioSeparatorWorker(WorkerBase):
 
 
 if __name__ == "__main__":
+    import multiprocessing
+    multiprocessing.freeze_support()
+
     run_worker(AudioSeparatorWorker)
