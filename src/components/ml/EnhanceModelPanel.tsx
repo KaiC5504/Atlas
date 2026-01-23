@@ -47,6 +47,7 @@ export function EnhanceModelPanel({ jobs, onRefresh }: EnhanceModelPanelProps) {
     epochs: 15,
     learning_rate: 0.0001,
     bulk_positive_files: [],
+    bulk_negative_files: [],
     fine_tune: true,
     freeze_layers: true,
     unfreeze_after: 5,

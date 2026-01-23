@@ -145,6 +145,8 @@ pub struct UITrainingConfig {
     pub learning_rate: f64,
     #[serde(default)]
     pub bulk_positive_files: Vec<String>,
+    #[serde(default)]
+    pub bulk_negative_files: Vec<String>,
     #[serde(default = "default_fine_tune")]
     pub fine_tune: bool,
     #[serde(default = "default_freeze_layers")]
@@ -171,6 +173,7 @@ impl Default for UITrainingConfig {
             epochs: 15,           // Reduced from 30 for fine-tuning
             learning_rate: 0.0001, // Reduced from 0.001 for fine-tuning
             bulk_positive_files: vec![],
+            bulk_negative_files: vec![],
             fine_tune: true,
             freeze_layers: true,
             unfreeze_after: 5,

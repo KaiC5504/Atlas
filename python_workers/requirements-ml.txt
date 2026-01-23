@@ -7,3 +7,7 @@ librosa
 numpy
 onnxruntime
 pydub
+tensorboard
+PyYAML
+scikit-learn
+tqdm

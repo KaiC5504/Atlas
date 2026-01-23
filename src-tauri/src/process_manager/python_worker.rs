@@ -60,35 +60,37 @@ pub fn get_python_path() -> String {
     "python".to_string()
 }
 
-/// Check if a python_workers directory is valid (contains common module)
 fn is_valid_workers_dir(dir: &std::path::Path) -> bool {
-    // Check for the common module which all workers need
-    dir.join("common").exists() && dir.join("common").join("__init__.py").exists()
+    let has_common = dir.join("common").exists() && dir.join("common").join("__init__.py").exists();
+
+    let dist_dir = dir.join("dist");
+    let has_dist = dist_dir.exists() && dist_dir.is_dir() &&
+        std::fs::read_dir(&dist_dir)
+            .map(|entries| entries.filter_map(|e| e.ok())
+                .any(|e| e.path().extension().map_or(false, |ext| ext == "exe")))
+            .unwrap_or(false);
+
+    println!("is_valid_workers_dir({:?}): has_common={}, has_dist={}, dist_exists={}",
+        dir, has_common, has_dist, dist_dir.exists());
+
+    has_common || has_dist
 }
 
-/// Get the path to the python_workers directory
 pub fn get_workers_dir() -> std::path::PathBuf {
     if let Ok(exe_path) = std::env::current_exe() {
         println!("Executable path: {:?}", exe_path);
 
         if let Some(exe_dir) = exe_path.parent() {
-            // Check next to exe (production builds)
-            let workers_dir = exe_dir.join("python_workers");
-            if workers_dir.exists() && is_valid_workers_dir(&workers_dir) {
-                println!("Found python_workers next to exe: {:?}", workers_dir);
-                return workers_dir;
-            }
-
-            // Search up the directory tree (development builds)
-            // For tauri dev, exe is in src-tauri/target/debug/
-            // We need to go up to project root to find python_workers
+            // First, search up the directory tree for development builds
+            // This finds the project root's python_workers with source .py files
             let mut current = exe_dir;
             for i in 0..5 {
                 if let Some(parent) = current.parent() {
                     let dev_workers_dir = parent.join("python_workers");
                     println!("Checking for python_workers at: {:?} (level {})", dev_workers_dir, i);
-                    if dev_workers_dir.exists() && is_valid_workers_dir(&dev_workers_dir) {
-                        println!("Found valid python_workers at: {:?}", dev_workers_dir);
+                    // Check for common module (indicates dev environment with source files)
+                    if dev_workers_dir.join("common").join("__init__.py").exists() {
+                        println!("Found dev python_workers at: {:?}", dev_workers_dir);
                         return dev_workers_dir;
                     }
                     current = parent;
@@ -96,10 +98,16 @@ pub fn get_workers_dir() -> std::path::PathBuf {
                     break;
                 }
             }
+
+            // Then check next to exe (production/release builds)
+            let workers_dir = exe_dir.join("python_workers");
+            if workers_dir.exists() && is_valid_workers_dir(&workers_dir) {
+                println!("Found python_workers next to exe: {:?}", workers_dir);
+                return workers_dir;
+            }
         }
     }
 
-    // Fallback to current working directory
     let cwd_workers = std::env::current_dir()
         .unwrap_or_default()
         .join("python_workers");
@@ -108,44 +116,39 @@ pub fn get_workers_dir() -> std::path::PathBuf {
     cwd_workers
 }
 
-/// ML workers that require special dependencies (torch, demucs, etc.)
-/// These are not bundled by default to keep installer size small
 const ML_WORKERS: &[&str] = &[
     "audio_separator",
     "audio_event_detector",
     "model_enhancer",
 ];
 
-/// Check if a worker is an ML worker that requires special dependencies
 fn is_ml_worker(script: &str) -> bool {
     let base_name = script.trim_end_matches(".py");
     ML_WORKERS.iter().any(|&ml| base_name == ml)
 }
 
-/// Find the worker executable - checks for compiled .exe first, then falls back to .py script
-/// Returns the appropriate WorkerExecutable variant for the given script name
 pub fn find_worker_executable(script: &str) -> Result<WorkerExecutable, String> {
     let workers_dir = get_workers_dir();
+    println!("find_worker_executable: script={}, workers_dir={:?}", script, workers_dir);
 
-    // Get the base name without extension (e.g., "yt_dlp_worker" from "yt_dlp_worker.py")
     let base_name = script.trim_end_matches(".py");
 
-    // First, check for compiled .exe in dist directory (production builds)
     let exe_path = workers_dir.join("dist").join(format!("{}.exe", base_name));
+    println!("  Checking exe: {:?} exists={}", exe_path, exe_path.exists());
     if exe_path.exists() {
         println!("Found compiled worker: {:?}", exe_path);
         return Ok(WorkerExecutable::Exe(exe_path));
     }
 
-    // Also check directly in workers_dir (alternative layout)
     let exe_path_direct = workers_dir.join(format!("{}.exe", base_name));
+    println!("  Checking exe direct: {:?} exists={}", exe_path_direct, exe_path_direct.exists());
     if exe_path_direct.exists() {
         println!("Found compiled worker: {:?}", exe_path_direct);
         return Ok(WorkerExecutable::Exe(exe_path_direct));
     }
 
-    // Fall back to Python script (development mode)
     let script_path = workers_dir.join(script);
+    println!("  Checking script: {:?} exists={}", script_path, script_path.exists());
     if script_path.exists() {
         let python_path = get_python_path();
         println!("Using Python script (dev mode): {:?} with {}", script_path, python_path);
@@ -155,12 +158,12 @@ pub fn find_worker_executable(script: &str) -> Result<WorkerExecutable, String> 
         });
     }
 
-    // Provide user-friendly error for ML workers
     if is_ml_worker(script) {
         return Err(format!(
             "This feature requires machine learning components that are not installed. \
             ML features (audio separation, audio detection) require additional setup. \
-            Please contact the developer if you need this feature."
+            Please contact the developer if you need this feature. \
+            Debug: workers_dir={:?}, script={}", workers_dir, script
         ));
     }
 
@@ -172,26 +175,20 @@ pub fn find_worker_executable(script: &str) -> Result<WorkerExecutable, String> 
     ))
 }
 
-/// Spawn a Python worker asynchronously with optional progress callback
-/// Automatically uses compiled .exe if available, otherwise falls back to Python script
 pub async fn spawn_python_worker_async(
     script: &str,
     input: serde_json::Value,
     progress_callback: Option<mpsc::Sender<WorkerMessage>>,
 ) -> Result<serde_json::Value, String> {
-    // Find the worker executable (compiled .exe or Python script)
     let worker_exec = find_worker_executable(script)?;
 
     println!("Spawning worker: {:?}", worker_exec);
 
-    // Build command based on executable type
     let mut cmd = match &worker_exec {
         WorkerExecutable::Exe(exe_path) => {
-            // Direct execution of compiled .exe
             Command::new(exe_path)
         }
         WorkerExecutable::Script { python_path, script_path } => {
-            // Python interpreter execution
             let mut c = Command::new(python_path);
             c.arg(script_path);
             c
@@ -234,7 +231,6 @@ pub async fn spawn_python_worker_async(
     let mut last_error: Option<String> = None;
 
     while let Ok(Some(line)) = reader.next_line().await {
-        // Log line size for debugging large outputs
         if line.len() > 10000 {
             println!("[Python worker] Received large line: {} bytes", line.len());
         }
@@ -268,7 +264,6 @@ pub async fn spawn_python_worker_async(
                 }
             }
         } else {
-            // Log parse failures for non-empty lines
             if !line.trim().is_empty() {
                 println!("[Python] Failed to parse as WorkerMessage ({} bytes): {}",
                     line.len(),

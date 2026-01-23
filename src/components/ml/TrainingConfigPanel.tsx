@@ -9,12 +9,13 @@ interface TrainingConfigPanelProps {
 }
 
 export function TrainingConfigPanel({ config, onChange, disabled }: TrainingConfigPanelProps) {
-  const bulkFiles = config.bulk_positive_files || [];
+  const bulkPositiveFiles = config.bulk_positive_files || [];
+  const bulkNegativeFiles = config.bulk_negative_files || [];
   const fineTune = config.fine_tune ?? true;
   const freezeLayers = config.freeze_layers ?? true;
   const unfreezeAfter = config.unfreeze_after ?? 5;
 
-  async function handleAddBulkFiles() {
+  async function handleAddBulkPositiveFiles() {
     const selected = await open({
       multiple: true,
       filters: [
@@ -23,13 +24,31 @@ export function TrainingConfigPanel({ config, onChange, disabled }: TrainingConf
     });
     if (selected) {
       const files = Array.isArray(selected) ? selected : [selected];
-      const newFiles = [...bulkFiles, ...files.filter(f => !bulkFiles.includes(f))];
+      const newFiles = [...bulkPositiveFiles, ...files.filter(f => !bulkPositiveFiles.includes(f))];
       onChange({ ...config, bulk_positive_files: newFiles });
     }
   }
 
-  function handleRemoveBulkFile(file: string) {
-    onChange({ ...config, bulk_positive_files: bulkFiles.filter(f => f !== file) });
+  function handleRemoveBulkPositiveFile(file: string) {
+    onChange({ ...config, bulk_positive_files: bulkPositiveFiles.filter(f => f !== file) });
+  }
+
+  async function handleAddBulkNegativeFiles() {
+    const selected = await open({
+      multiple: true,
+      filters: [
+        { name: 'Audio', extensions: ['mp3', 'wav', 'flac', 'ogg', 'm4a', 'aac'] },
+      ],
+    });
+    if (selected) {
+      const files = Array.isArray(selected) ? selected : [selected];
+      const newFiles = [...bulkNegativeFiles, ...files.filter(f => !bulkNegativeFiles.includes(f))];
+      onChange({ ...config, bulk_negative_files: newFiles });
+    }
+  }
+
+  function handleRemoveBulkNegativeFile(file: string) {
+    onChange({ ...config, bulk_negative_files: bulkNegativeFiles.filter(f => f !== file) });
   }
 
   function getFileName(path: string) {
@@ -182,7 +201,7 @@ export function TrainingConfigPanel({ config, onChange, disabled }: TrainingConf
             <span className="text-text-muted/60 ml-1">(optional)</span>
           </label>
           <button
-            onClick={handleAddBulkFiles}
+            onClick={handleAddBulkPositiveFiles}
             disabled={disabled}
             className="btn btn-sm btn-ghost flex items-center gap-1"
           >
@@ -194,19 +213,19 @@ export function TrainingConfigPanel({ config, onChange, disabled }: TrainingConf
           Add full audio files that contain only target audio. They'll be automatically sliced into 1-second training samples.
         </p>
 
-        {bulkFiles.length > 0 ? (
+        {bulkPositiveFiles.length > 0 ? (
           <div className="space-y-1 max-h-32 overflow-y-auto">
-            {bulkFiles.map((file) => (
+            {bulkPositiveFiles.map((file) => (
               <div
                 key={file}
                 className="flex items-center justify-between p-2 rounded bg-surface-secondary text-sm"
               >
                 <div className="flex items-center gap-2 min-w-0">
-                  <FileAudio size={14} className="text-primary shrink-0" />
+                  <FileAudio size={14} className="text-green-400 shrink-0" />
                   <span className="truncate">{getFileName(file)}</span>
                 </div>
                 <button
-                  onClick={() => handleRemoveBulkFile(file)}
+                  onClick={() => handleRemoveBulkPositiveFile(file)}
                   disabled={disabled}
                   className="btn btn-ghost btn-xs p-1 text-text-muted hover:text-error"
                 >
@@ -217,7 +236,55 @@ export function TrainingConfigPanel({ config, onChange, disabled }: TrainingConf
           </div>
         ) : (
           <div className="text-xs text-text-muted/60 italic">
-            No bulk files added
+            No bulk positive files added
+          </div>
+        )}
+      </div>
+
+      {/* Bulk Negative Files Section */}
+      <div className="border-t border-border pt-4">
+        <div className="flex items-center justify-between mb-2">
+          <label className="block text-xs text-text-muted">
+            Bulk Negative Audio Files
+            <span className="text-text-muted/60 ml-1">(optional)</span>
+          </label>
+          <button
+            onClick={handleAddBulkNegativeFiles}
+            disabled={disabled}
+            className="btn btn-sm btn-ghost flex items-center gap-1"
+          >
+            <FolderPlus size={14} />
+            Add Files
+          </button>
+        </div>
+        <p className="text-xs text-text-muted mb-2">
+          Add full audio files that contain NO target audio (background noise, other sounds). They'll be automatically sliced into 1-second training samples.
+        </p>
+
+        {bulkNegativeFiles.length > 0 ? (
+          <div className="space-y-1 max-h-32 overflow-y-auto">
+            {bulkNegativeFiles.map((file) => (
+              <div
+                key={file}
+                className="flex items-center justify-between p-2 rounded bg-surface-secondary text-sm"
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <FileAudio size={14} className="text-red-400 shrink-0" />
+                  <span className="truncate">{getFileName(file)}</span>
+                </div>
+                <button
+                  onClick={() => handleRemoveBulkNegativeFile(file)}
+                  disabled={disabled}
+                  className="btn btn-ghost btn-xs p-1 text-text-muted hover:text-error"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-xs text-text-muted/60 italic">
+            No bulk negative files added
           </div>
         )}
       </div>

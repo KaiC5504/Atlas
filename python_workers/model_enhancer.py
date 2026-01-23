@@ -44,14 +44,16 @@ class ModelEnhancer(WorkerBase):
 
     def validate_input(self, input_data: Dict[str, Any]) -> None:
         has_feedback = input_data.get('feedback_sessions')
-        has_bulk = input_data.get('bulk_positive_files')
+        has_bulk_positive = input_data.get('bulk_positive_files')
+        has_bulk_negative = input_data.get('bulk_negative_files')
 
-        if not has_feedback and not has_bulk:
-            raise ValueError("Need either feedback_sessions or bulk_positive_files")
+        if not has_feedback and not has_bulk_positive and not has_bulk_negative:
+            raise ValueError("Need either feedback_sessions or bulk files")
 
     def process(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         feedback_sessions = input_data.get('feedback_sessions', [])
         bulk_positive_files = input_data.get('bulk_positive_files', [])
+        bulk_negative_files = input_data.get('bulk_negative_files', [])
         model_output_path = input_data.get('model_output_path')
         original_model_path = input_data.get('original_model_path')
         config = input_data.get('config', {})
@@ -88,10 +90,11 @@ class ModelEnhancer(WorkerBase):
 
         write_progress(5, "Preparing feedback data...")
 
-        correct_samples = []  
-        wrong_samples = []    
-        manual_positives = [] 
-        bulk_positives = []  
+        correct_samples = []
+        wrong_samples = []
+        manual_positives = []
+        bulk_positives = []
+        bulk_negatives = []  
 
         for session in feedback_sessions:
             source_file = session['source_file']
@@ -142,8 +145,35 @@ class ModelEnhancer(WorkerBase):
             except Exception as e:
                 write_log(f"Error processing bulk file {file_path}: {e}", "warning")
 
+        # Process bulk negative files - slice into windows
+        for bulk_file in bulk_negative_files:
+            file_path = bulk_file if isinstance(bulk_file, str) else bulk_file.get('path')
+            if not file_path or not Path(file_path).exists():
+                write_log(f"Bulk negative file not found: {file_path}", "warning")
+                continue
+
+            # Get audio duration
+            try:
+                import librosa
+                duration = librosa.get_duration(path=file_path)
+                write_log(f"Processing bulk negative file: {Path(file_path).name} ({duration:.1f}s)", "info")
+
+                # Slice into windows
+                current_time = 0.0
+                while current_time + bulk_window_size <= duration:
+                    bulk_negatives.append({
+                        'source_file': file_path,
+                        'start_seconds': current_time,
+                        'end_seconds': current_time + bulk_window_size,
+                    })
+                    current_time += bulk_hop_size
+
+                write_log(f"  -> Created {len([b for b in bulk_negatives if b['source_file'] == file_path])} windows", "info")
+            except Exception as e:
+                write_log(f"Error processing bulk negative file {file_path}: {e}", "warning")
+
         total_feedback = len(correct_samples) + len(wrong_samples) + len(manual_positives)
-        total_bulk = len(bulk_positives)
+        total_bulk = len(bulk_positives) + len(bulk_negatives)
         total_samples = total_feedback + total_bulk
 
         write_log(f"Collected {total_samples} total samples", "info")
@@ -151,6 +181,7 @@ class ModelEnhancer(WorkerBase):
         write_log(f"  - Wrong (false positives -> negatives): {len(wrong_samples)}", "info")
         write_log(f"  - Manual positives (false negatives): {len(manual_positives)}", "info")
         write_log(f"  - Bulk positive windows: {len(bulk_positives)}", "info")
+        write_log(f"  - Bulk negative windows: {len(bulk_negatives)}", "info")
 
         if total_samples < 2:
             raise ValueError("Need at least 2 samples to train")
@@ -176,7 +207,7 @@ class ModelEnhancer(WorkerBase):
             val_negative_dir.mkdir(parents=True, exist_ok=True)
 
             all_positives = correct_samples + manual_positives + bulk_positives
-            all_negatives = wrong_samples
+            all_negatives = wrong_samples + bulk_negatives
 
             # Extract correct samples and manual positives as positives
             positive_count = 0

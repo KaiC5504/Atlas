@@ -145,6 +145,7 @@ export interface UITrainingConfig {
   epochs: number;
   learning_rate: number;
   bulk_positive_files?: string[]; // Full audio files to slice as positive samples
+  bulk_negative_files?: string[]; // Full audio files to slice as negative samples
   fine_tune?: boolean;           // Default: true - fine-tune existing model instead of training from scratch
   freeze_layers?: boolean;       // Default: true - freeze early conv layers to prevent forgetting
   unfreeze_after?: number;       // Default: 5 - unfreeze all layers after N epochs for gradual fine-tuning
@@ -154,6 +155,7 @@ export const DEFAULT_UI_TRAINING_CONFIG: UITrainingConfig = {
   epochs: 15,             // Reduced from 30 for fine-tuning
   learning_rate: 0.0001,  // Reduced from 0.001 for fine-tuning
   bulk_positive_files: [],
+  bulk_negative_files: [],
   fine_tune: true,
   freeze_layers: true,
   unfreeze_after: 5,

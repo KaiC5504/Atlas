@@ -463,16 +463,17 @@ pub async fn start_model_training(
         .map(|s| s.samples.len() + s.manual_positives.len())
         .sum();
 
-    let has_bulk = !config.bulk_positive_files.is_empty();
+    let has_bulk = !config.bulk_positive_files.is_empty() || !config.bulk_negative_files.is_empty();
 
     if total_samples < 2 && !has_bulk {
-        return Err("Need at least 2 feedback samples or bulk positive files to train".to_string());
+        return Err("Need at least 2 feedback samples or bulk files to train".to_string());
     }
 
     // Prepare worker input
     let worker_input = serde_json::json!({
         "feedback_sessions": selected,
         "bulk_positive_files": config.bulk_positive_files,
+        "bulk_negative_files": config.bulk_negative_files,
         "model_output_path": get_models_dir().join("audio_event_detector.onnx").to_string_lossy(),
         "original_model_path": get_models_dir().join("audio_event_detector.onnx").to_string_lossy(),
         "config": {

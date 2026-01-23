@@ -21,7 +21,8 @@ $Workers = @(
     "ssh_worker.py",
     "playlist_uploader_worker.py",
     "audio_separator.py",
-    "audio_event_detector.py"
+    "audio_event_detector.py",
+    "model_enhancer.py"
 )
 
 Write-Host "============================================" -ForegroundColor Cyan
@@ -78,121 +79,175 @@ New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
 Write-Host "  Output: $OutputDir" -ForegroundColor Green
 Write-Host ""
 
-# Build each worker
-Write-Host "[3/4] Compiling workers with PyInstaller..." -ForegroundColor Cyan
-$successCount = 0
-$failCount = 0
+# Worker-specific hidden imports configuration
+$WorkerConfig = @{
+    "yt_dlp_worker" = @(
+        "--hidden-import=yt_dlp",
+        "--hidden-import=yt_dlp.extractor",
+        "--hidden-import=yt_dlp.downloader",
+        "--hidden-import=yt_dlp.postprocessor",
+        "--collect-all=yt_dlp"
+    )
+    "valorant_checker" = @(
+        "--hidden-import=requests",
+        "--hidden-import=tls_client",
+        "--hidden-import=urllib3",
+        "--hidden-import=certifi",
+        "--collect-all=tls_client",
+        "--collect-all=certifi"
+    )
+    "ssh_worker" = @(
+        "--hidden-import=paramiko",
+        "--hidden-import=cryptography",
+        "--hidden-import=bcrypt",
+        "--hidden-import=nacl"
+    )
+    "playlist_uploader_worker" = @(
+        "--hidden-import=yt_dlp",
+        "--hidden-import=paramiko",
+        "--hidden-import=pypinyin",
+        "--hidden-import=opencc",
+        "--collect-all=yt_dlp",
+        "--collect-all=pypinyin",
+        "--collect-all=opencc"
+    )
+    "audio_separator" = @(
+        "--hidden-import=torch",
+        "--hidden-import=torchaudio",
+        "--hidden-import=librosa",
+        "--hidden-import=numpy",
+        "--hidden-import=demucs",
+        "--hidden-import=demucs.pretrained",
+        "--hidden-import=demucs.apply",
+        "--collect-all=torch",
+        "--collect-all=torchaudio",
+        "--collect-all=demucs",
+        "--collect-all=librosa"
+    )
+    "audio_event_detector" = @(
+        "--hidden-import=numpy",
+        "--hidden-import=librosa",
+        "--hidden-import=onnxruntime",
+        "--hidden-import=pydub",
+        "--collect-all=librosa",
+        "--collect-all=onnxruntime"
+    )
+    "model_enhancer" = @(
+        "--hidden-import=torch",
+        "--hidden-import=numpy",
+        "--hidden-import=librosa",
+        "--hidden-import=onnx",
+        "--hidden-import=onnxruntime",
+        "--hidden-import=tensorboard",
+        "--hidden-import=sklearn",
+        "--hidden-import=sklearn.metrics",
+        "--hidden-import=yaml",
+        "--hidden-import=tqdm",
+        "--collect-all=torch",
+        "--collect-all=librosa",
+        "--collect-all=tensorboard",
+        "--collect-all=sklearn",
+        "--collect-all=onnxruntime"
+    )
+}
 
+# Build all workers in parallel
+Write-Host "[3/4] Compiling workers with PyInstaller (parallel)..." -ForegroundColor Cyan
+$processes = @{}
+
+$skippedCount = 0
 foreach ($worker in $Workers) {
     $workerName = [System.IO.Path]::GetFileNameWithoutExtension($worker)
     $workerPath = "$WorkersDir\$worker"
 
-    Write-Host "  Building $workerName..." -ForegroundColor White
-
     if (-not (Test-Path $workerPath)) {
-        Write-Host "    ERROR: Worker not found: $workerPath" -ForegroundColor Red
-        $failCount++
+        Write-Host "  SKIP: Worker not found: $workerPath" -ForegroundColor Red
         continue
     }
 
-    # PyInstaller command
-    # --onefile: Single executable
-    # --console: Show console for debugging (remove for production)
-    # --noconfirm: Overwrite without asking
-    # --clean: Clean cache before building
-    # --paths: Add common module to path
-    # --hidden-import: Include modules that PyInstaller might miss
+    # Skip if exe exists and is newer than source (unless -Clean)
+    $exePath = "$OutputDir\$workerName.exe"
+    if (-not $Clean -and (Test-Path $exePath)) {
+        $exeTime = (Get-Item $exePath).LastWriteTime
+        $srcTime = (Get-Item $workerPath).LastWriteTime
 
+        # Also check common module timestamps
+        $commonDir = "$WorkersDir\common"
+        $commonChanged = $false
+        if (Test-Path $commonDir) {
+            Get-ChildItem "$commonDir\*.py" | ForEach-Object {
+                if ($_.LastWriteTime -gt $exeTime) { $commonChanged = $true }
+            }
+        }
+
+        if ($srcTime -lt $exeTime -and -not $commonChanged) {
+            Write-Host "  SKIP: $workerName.exe is up to date" -ForegroundColor DarkGray
+            $skippedCount++
+            continue
+        }
+    }
+
+    # Ensure build directory exists
+    New-Item -ItemType Directory -Path "$WorkersDir\build\$workerName" -Force | Out-Null
+
+    # Base PyInstaller arguments
     $pyinstallerArgs = @(
         "--onefile",
         "--noconfirm",
-        "--clean",
         "--paths=$WorkersDir",
         "--distpath=$OutputDir",
-        "--workpath=$WorkersDir\build",
+        "--workpath=$WorkersDir\build\$workerName",
         "--specpath=$WorkersDir",
         "--name=$workerName"
     )
 
-    # Add worker-specific hidden imports
-    switch ($workerName) {
-        "yt_dlp_worker" {
-            $pyinstallerArgs += "--hidden-import=yt_dlp"
-            $pyinstallerArgs += "--hidden-import=yt_dlp.extractor"
-            $pyinstallerArgs += "--hidden-import=yt_dlp.downloader"
-            $pyinstallerArgs += "--hidden-import=yt_dlp.postprocessor"
-            # Collect all yt-dlp data
-            $pyinstallerArgs += "--collect-all=yt_dlp"
-        }
-        "valorant_checker" {
-            $pyinstallerArgs += "--hidden-import=requests"
-            $pyinstallerArgs += "--hidden-import=tls_client"
-            $pyinstallerArgs += "--hidden-import=urllib3"
-            $pyinstallerArgs += "--hidden-import=certifi"
-            # tls_client has native DLLs that must be collected
-            $pyinstallerArgs += "--collect-all=tls_client"
-            $pyinstallerArgs += "--collect-all=certifi"
-        }
-        "ssh_worker" {
-            $pyinstallerArgs += "--hidden-import=paramiko"
-            $pyinstallerArgs += "--hidden-import=cryptography"
-            $pyinstallerArgs += "--hidden-import=bcrypt"
-            $pyinstallerArgs += "--hidden-import=nacl"
-        }
-        "playlist_uploader_worker" {
-            $pyinstallerArgs += "--hidden-import=yt_dlp"
-            $pyinstallerArgs += "--hidden-import=paramiko"
-            $pyinstallerArgs += "--hidden-import=pypinyin"
-            $pyinstallerArgs += "--hidden-import=opencc"
-            $pyinstallerArgs += "--collect-all=yt_dlp"
-            $pyinstallerArgs += "--collect-all=pypinyin"
-            $pyinstallerArgs += "--collect-all=opencc"
-        }
-        "audio_separator" {
-            $pyinstallerArgs += "--hidden-import=torch"
-            $pyinstallerArgs += "--hidden-import=torchaudio"
-            $pyinstallerArgs += "--hidden-import=librosa"
-            $pyinstallerArgs += "--hidden-import=numpy"
-            $pyinstallerArgs += "--hidden-import=demucs"
-            $pyinstallerArgs += "--hidden-import=demucs.pretrained"
-            $pyinstallerArgs += "--hidden-import=demucs.apply"
-            # Collect all data and native binaries for ML libraries
-            $pyinstallerArgs += "--collect-all=torch"
-            $pyinstallerArgs += "--collect-all=torchaudio"
-            $pyinstallerArgs += "--collect-all=demucs"
-            $pyinstallerArgs += "--collect-all=librosa"
-        }
-        "audio_event_detector" {
-            $pyinstallerArgs += "--hidden-import=numpy"
-            $pyinstallerArgs += "--hidden-import=librosa"
-            $pyinstallerArgs += "--hidden-import=onnxruntime"
-            $pyinstallerArgs += "--hidden-import=pydub"
-            # Collect all data and native binaries for ML/audio libraries
-            $pyinstallerArgs += "--collect-all=librosa"
-            $pyinstallerArgs += "--collect-all=onnxruntime"
-        }
+    # Add --clean if requested
+    if ($Clean) {
+        $pyinstallerArgs += "--clean"
+    }
+
+    # Add worker-specific imports
+    if ($WorkerConfig.ContainsKey($workerName)) {
+        $pyinstallerArgs += $WorkerConfig[$workerName]
     }
 
     # Add the worker script path
     $pyinstallerArgs += $workerPath
 
-    try {
-        # Run PyInstaller
-        $process = Start-Process -FilePath "pyinstaller" -ArgumentList $pyinstallerArgs -NoNewWindow -Wait -PassThru -RedirectStandardOutput "$WorkersDir\build\$workerName.log" -RedirectStandardError "$WorkersDir\build\$workerName.err"
+    Write-Host "  Starting $workerName..." -ForegroundColor White
 
-        if ($process.ExitCode -eq 0 -and (Test-Path "$OutputDir\$workerName.exe")) {
-            $size = [math]::Round((Get-Item "$OutputDir\$workerName.exe").Length / 1MB, 2)
-            Write-Host "    OK: $workerName.exe ($size MB)" -ForegroundColor Green
-            $successCount++
-        } else {
-            Write-Host "    FAILED: Check $WorkersDir\build\$workerName.err for details" -ForegroundColor Red
-            if (Test-Path "$WorkersDir\build\$workerName.err") {
-                Get-Content "$WorkersDir\build\$workerName.err" | Select-Object -Last 10 | ForEach-Object { Write-Host "      $_" -ForegroundColor DarkRed }
-            }
-            $failCount++
+    # Start PyInstaller in parallel (no -Wait)
+    $process = Start-Process -FilePath "pyinstaller" -ArgumentList $pyinstallerArgs -NoNewWindow -PassThru -RedirectStandardOutput "$WorkersDir\build\$workerName.log" -RedirectStandardError "$WorkersDir\build\$workerName.err"
+    $processes[$workerName] = $process
+}
+
+Write-Host ""
+if ($processes.Count -gt 0) {
+    Write-Host "  Building $($processes.Count) workers in parallel..." -ForegroundColor Yellow
+} else {
+    Write-Host "  All workers are up to date!" -ForegroundColor Green
+}
+Write-Host ""
+
+# Wait for all processes to complete and collect results
+$successCount = 0
+$failCount = 0
+
+foreach ($workerName in $processes.Keys) {
+    $process = $processes[$workerName]
+    $process.WaitForExit()
+
+    # Note: Start-Process with output redirection may not capture exit code reliably
+    # So we primarily check if the exe was created successfully
+    if (Test-Path "$OutputDir\$workerName.exe") {
+        $size = [math]::Round((Get-Item "$OutputDir\$workerName.exe").Length / 1MB, 2)
+        Write-Host "  OK: $workerName.exe ($size MB)" -ForegroundColor Green
+        $successCount++
+    } else {
+        Write-Host "  FAILED: $workerName - Check $WorkersDir\build\$workerName.err" -ForegroundColor Red
+        if (Test-Path "$WorkersDir\build\$workerName.err") {
+            Get-Content "$WorkersDir\build\$workerName.err" | Select-Object -Last 5 | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkRed }
         }
-    } catch {
-        Write-Host "    ERROR: $($_.Exception.Message)" -ForegroundColor Red
         $failCount++
     }
 }
@@ -213,9 +268,13 @@ Write-Host ""
 # Summary
 Write-Host "============================================" -ForegroundColor Cyan
 if ($failCount -eq 0) {
-    Write-Host "Build Complete! All $successCount workers compiled." -ForegroundColor Green
+    if ($skippedCount -gt 0) {
+        Write-Host "Build Complete! $successCount compiled, $skippedCount skipped (up to date)" -ForegroundColor Green
+    } else {
+        Write-Host "Build Complete! All $successCount workers compiled." -ForegroundColor Green
+    }
 } else {
-    Write-Host "Build finished with errors: $successCount succeeded, $failCount failed" -ForegroundColor Yellow
+    Write-Host "Build finished with errors: $successCount succeeded, $failCount failed, $skippedCount skipped" -ForegroundColor Yellow
 }
 Write-Host "============================================" -ForegroundColor Cyan
 Write-Host ""

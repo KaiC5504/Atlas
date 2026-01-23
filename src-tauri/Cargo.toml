@@ -1,6 +1,6 @@
 [package]
 name = "atlas"
-version = "1.5.6"
+version = "1.5.13"
 description = "Atlas - Local-first desktop app for media processing and ML"
 authors = ["Atlas Team"]
 edition = "2021"
