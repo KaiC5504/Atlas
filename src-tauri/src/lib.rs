@@ -21,6 +21,11 @@ use commands::{
     autostart::{disable_autostart, enable_autostart, is_autostart_enabled},
     discord::{connect_discord, disconnect_discord, is_discord_connected},
     downloads::{add_download, cancel_download, delete_download, list_downloads, start_download, validate_download_path},
+    gacha::{
+        delete_gacha_history, export_gacha_uigf, get_gacha_accounts, get_gacha_game_icon_path,
+        get_gacha_history, get_gacha_stats, get_gacha_supported_games, import_gacha_uigf,
+        refresh_gacha_games_cache, refresh_gacha_history,
+    },
     gaming::{
         add_game_to_whitelist, delete_gaming_session, end_gaming_session,
         get_active_gaming_session, get_active_session_state, get_bottleneck_thresholds,
@@ -138,6 +143,7 @@ pub fn run() {
         )
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
@@ -374,6 +380,17 @@ pub fn run() {
             remove_game_from_library,
             launch_game,
             get_icon_base64,
+            // Gacha history commands
+            get_gacha_accounts,
+            get_gacha_history,
+            get_gacha_stats,
+            get_gacha_supported_games,
+            refresh_gacha_games_cache,
+            get_gacha_game_icon_path,
+            refresh_gacha_history,
+            delete_gacha_history,
+            export_gacha_uigf,
+            import_gacha_uigf,
             // Playlist uploader commands
             get_music_directory,
             get_local_music_index,

@@ -3,6 +3,7 @@ pub mod auth;
 pub mod autostart;
 pub mod discord;
 pub mod downloads;
+pub mod gacha;
 pub mod gaming;
 pub mod launcher;
 pub mod ml_jobs;

@@ -68,7 +68,7 @@ fn is_valid_workers_dir(dir: &std::path::Path) -> bool {
     let has_dist = dist_dir.exists() && dist_dir.is_dir() &&
         std::fs::read_dir(&dist_dir)
             .map(|entries| entries.filter_map(|e| e.ok())
-                .any(|e| e.path().extension().map_or(false, |ext| ext == "exe")))
+                .any(|e| e.path().is_dir()))
             .unwrap_or(false);
 
     debug!(target: "python_worker", "is_valid_workers_dir({:?}): has_common={}, has_dist={}, dist_exists={}",
@@ -150,8 +150,8 @@ pub fn find_worker_executable(script: &str) -> Result<WorkerExecutable, String> 
             });
         }
 
-        // Fall back to .exe if .py not found
-        let exe_path = workers_dir.join("dist").join(format!("{}.exe", base_name));
+        // Fall back to .exe if .py not found (--onedir structure: dist/{name}/{name}.exe)
+        let exe_path = workers_dir.join("dist").join(base_name).join(format!("{}.exe", base_name));
         if exe_path.exists() {
             debug!(target: "python_worker", "Found compiled worker (fallback): {:?}", exe_path);
             return Ok(WorkerExecutable::Exe(exe_path));
@@ -169,8 +169,8 @@ pub fn find_worker_executable(script: &str) -> Result<WorkerExecutable, String> 
     {
         debug!(target: "python_worker", "find_worker_executable (RELEASE): script={}, workers_dir={:?}", script, workers_dir);
 
-        // First try .exe in dist folder
-        let exe_path = workers_dir.join("dist").join(format!("{}.exe", base_name));
+        // First try .exe in dist folder (--onedir structure: dist/{name}/{name}.exe)
+        let exe_path = workers_dir.join("dist").join(base_name).join(format!("{}.exe", base_name));
         debug!(target: "python_worker", "  Checking exe: {:?} exists={}", exe_path, exe_path.exists());
         if exe_path.exists() {
             debug!(target: "python_worker", "Found compiled worker: {:?}", exe_path);
@@ -209,9 +209,10 @@ pub fn find_worker_executable(script: &str) -> Result<WorkerExecutable, String> 
     }
 
     Err(format!(
-        "Worker not found: {} (checked {:?}/dist/{}.exe and {:?})",
+        "Worker not found: {} (checked {:?}/dist/{}/{}.exe and {:?})",
         script,
         workers_dir,
+        base_name,
         base_name,
         workers_dir.join(script)
     ))

@@ -10,3 +10,4 @@ export * from './gaming';
 export * from './updater';
 export * from './gameLauncher';
 export * from './playlistUploader';
+export * from './gacha';

@@ -147,6 +147,25 @@ pub fn get_feedback_audio_cache_dir() -> PathBuf {
     get_data_dir().join("feedback_audio_cache")
 }
 
+pub fn get_gacha_dir() -> PathBuf {
+    get_data_dir().join("gacha")
+}
+
+pub fn get_gacha_history_path(game: &str, uid: &str) -> PathBuf {
+    get_gacha_dir().join(format!("{}_{}.json", game, uid))
+}
+
+pub fn get_gacha_games_cache_path() -> PathBuf {
+    get_data_dir().join("gacha_games_cache.json")
+}
+
+pub fn get_icons_dir() -> PathBuf {
+    dirs::data_local_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("Atlas")
+        .join("icons")
+}
+
 pub fn initialize_data_directories() -> Result<(), String> {
     let directories = [
         get_data_dir(),
@@ -158,6 +177,7 @@ pub fn initialize_data_directories() -> Result<(), String> {
         get_gaming_sessions_dir(),
         get_music_tracks_dir(),
         get_music_playlists_dir(),
+        get_gacha_dir(),
     ];
 
     for dir in &directories {

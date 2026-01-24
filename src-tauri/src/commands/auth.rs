@@ -6,7 +6,7 @@ use log::{debug, info, warn};
 use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 use url::Url;
 
-const RIOT_AUTH_URL: &str = "https://playvalorant.com/opt_in";
+const RIOT_AUTH_URL: &str = "https://playvalorant.com/en-us/platform-selection/";
 const RIOT_AUTH_DOMAIN: &str = "auth.riotgames.com";
 
 /// Open the Riot authentication window

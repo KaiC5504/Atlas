@@ -184,7 +184,7 @@ foreach ($worker in $Workers) {
     }
 
     # Skip if exe exists and is newer than all dependencies (unless -Clean)
-    $exePath = "$OutputDir\$workerName.exe"
+    $exePath = "$OutputDir\$workerName\$workerName.exe"
     if (-not $Clean -and (Test-Path $exePath)) {
         $exeTime = (Get-Item $exePath).LastWriteTime
         # Add 30 second tolerance to handle parallel build timing issues
@@ -260,7 +260,7 @@ foreach ($worker in $Workers) {
 
     # Base PyInstaller arguments
     $pyinstallerArgs = @(
-        "--onefile",
+        "--onedir",
         "--noconfirm",
         "--paths=$WorkersDir",
         "--distpath=$OutputDir",
@@ -307,8 +307,8 @@ foreach ($workerName in $processes.Keys) {
 
     # Note: Start-Process with output redirection may not capture exit code reliably
     # So we primarily check if the exe was created successfully
-    if (Test-Path "$OutputDir\$workerName.exe") {
-        $size = [math]::Round((Get-Item "$OutputDir\$workerName.exe").Length / 1MB, 2)
+    if (Test-Path "$OutputDir\$workerName\$workerName.exe") {
+        $size = [math]::Round((Get-Item "$OutputDir\$workerName\$workerName.exe").Length / 1MB, 2)
         Write-Host "  OK: $workerName.exe ($size MB)" -ForegroundColor Green
         $successCount++
     } else {
@@ -348,7 +348,7 @@ Write-Host "============================================" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Output directory: $OutputDir" -ForegroundColor Cyan
 Write-Host ""
-Get-ChildItem "$OutputDir\*.exe" | ForEach-Object {
+Get-ChildItem "$OutputDir\*\*.exe" | ForEach-Object {
     $size = [math]::Round($_.Length / 1MB, 2)
     Write-Host "  - $($_.Name) ($size MB)"
 }

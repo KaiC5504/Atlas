@@ -17,6 +17,7 @@ import GamingPerformance from './views/GamingPerformance';
 import GameLauncher from './views/GameLauncher';
 import PlaylistUploader from './views/PlaylistUploader';
 import TaskMonitor from './views/TaskMonitor';
+import GachaHistory from './views/GachaHistory';
 import { Settings } from './views/Settings';
 import { useUpdater } from './hooks';
 import { NavigationSettingsProvider } from './contexts';
@@ -89,6 +90,7 @@ function App() {
             <Route path="/launcher" element={<GameLauncher />} />
             <Route path="/playlist-uploader" element={<PlaylistUploader />} />
             <Route path="/tasks" element={<TaskMonitor />} />
+            <Route path="/gacha" element={<GachaHistory />} />
             <Route path="/settings" element={<Settings />} />
           </Routes>
         </main>

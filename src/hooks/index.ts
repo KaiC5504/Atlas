@@ -11,3 +11,5 @@ export { useNavigationSettings } from './useNavigationSettings';
 export type { UseNavigationSettingsReturn } from './useNavigationSettings';
 export { usePlaylistUploader } from './usePlaylistUploader';
 export type { UsePlaylistUploaderReturn } from './usePlaylistUploader';
+export { useGachaHistory } from './useGachaHistory';
+export type { UseGachaHistoryReturn, GachaProgress } from './useGachaHistory';
