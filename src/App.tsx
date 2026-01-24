@@ -1,6 +1,6 @@
 // App.tsx - Main app component with routing + layout
 import { useEffect } from 'react';
-import { Routes, Route, useNavigate } from 'react-router-dom';
+import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 import { Sidebar } from './components/Sidebar';
@@ -31,6 +31,10 @@ function App() {
 
   const { state, checkForUpdate, downloadUpdate, installUpdate, dismissUpdate } = useUpdater();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Check if we're on the friends page
+  const isFriendsPage = location.pathname === '/friends';
 
   // Check for updates on app startup
   useEffect(() => {
@@ -80,22 +84,30 @@ function App() {
 
         {/* Main content area */}
         <main className="flex-1 p-6 overflow-auto animate-fade-in">
-          <Routes>
-            <Route path="/" element={<DefaultRouteRedirect />} />
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/downloads" element={<DownloadQueue />} />
-            <Route path="/ml-processor" element={<MLProcessor />} />
-            <Route path="/valorant" element={<ValorantTracker />} />
-            <Route path="/server" element={<ServerMonitor />} />
-            <Route path="/performance" element={<PerformanceMonitor />} />
-            <Route path="/gaming" element={<GamingPerformance />} />
-            <Route path="/launcher" element={<GameLauncher />} />
-            <Route path="/playlist-uploader" element={<PlaylistUploader />} />
-            <Route path="/tasks" element={<TaskMonitor />} />
-            <Route path="/gacha" element={<GachaHistory />} />
-            <Route path="/friends" element={<FriendsPage />} />
-            <Route path="/settings" element={<Settings />} />
-          </Routes>
+          {/* FriendsPage is always mounted but hidden when not active */}
+          {/* This keeps the connection alive and receives updates in the background */}
+          <div className={isFriendsPage ? 'h-full' : 'hidden'}>
+            <FriendsPage />
+          </div>
+
+          {/* Other pages render normally via Routes */}
+          {!isFriendsPage && (
+            <Routes>
+              <Route path="/" element={<DefaultRouteRedirect />} />
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/downloads" element={<DownloadQueue />} />
+              <Route path="/ml-processor" element={<MLProcessor />} />
+              <Route path="/valorant" element={<ValorantTracker />} />
+              <Route path="/server" element={<ServerMonitor />} />
+              <Route path="/performance" element={<PerformanceMonitor />} />
+              <Route path="/gaming" element={<GamingPerformance />} />
+              <Route path="/launcher" element={<GameLauncher />} />
+              <Route path="/playlist-uploader" element={<PlaylistUploader />} />
+              <Route path="/tasks" element={<TaskMonitor />} />
+              <Route path="/gacha" element={<GachaHistory />} />
+              <Route path="/settings" element={<Settings />} />
+            </Routes>
+          )}
         </main>
 
         {/* Update toast notification */}

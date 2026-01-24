@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Heart,
   Home,
@@ -65,10 +65,37 @@ export default function FriendsPage() {
   const [isEditingCode, setIsEditingCode] = useState(false);
   const [editedCode, setEditedCode] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
+  const [showLoadingIndicator, setShowLoadingIndicator] = useState(false);
   const codeInputRef = useRef<HTMLInputElement>(null);
+  const hasAutoConnected = useRef(false);
+  const isMounted = useRef(true);
+  const loadingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Check if user needs setup
   const needsSetup = !localUser?.id || !localUser?.username;
+
+  // Delayed loading indicator - only show spinner after 200ms to prevent flash
+  useEffect(() => {
+    if (isLoading) {
+      loadingTimeoutRef.current = setTimeout(() => {
+        if (isMounted.current) {
+          setShowLoadingIndicator(true);
+        }
+      }, 200);
+    } else {
+      if (loadingTimeoutRef.current) {
+        clearTimeout(loadingTimeoutRef.current);
+        loadingTimeoutRef.current = null;
+      }
+      setShowLoadingIndicator(false);
+    }
+
+    return () => {
+      if (loadingTimeoutRef.current) {
+        clearTimeout(loadingTimeoutRef.current);
+      }
+    };
+  }, [isLoading]);
 
   useEffect(() => {
     if (needsSetup && !isLoading) {
@@ -87,16 +114,39 @@ export default function FriendsPage() {
     return () => {
       stopPolling();
     };
-  }, [isConnected, activeTab, setPresenceActiveTab, startPolling, stopPolling]);
+    // Only re-run when connection status or active tab changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isConnected, activeTab]);
 
-  // Auto-connect on mount if user has auth token
+  // Track mount state for cleanup
   useEffect(() => {
-    if (localUser?.auth_token && !isConnected && connectionState === 'disconnected') {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
+  // Auto-connect on mount if user has auth token (only once)
+  // Wait for initial load to complete so we have accurate connection state from backend
+  useEffect(() => {
+    if (
+      !isLoading && // Wait for initial load to complete
+      localUser?.auth_token &&
+      !isConnected &&
+      connectionState === 'disconnected' &&
+      !hasAutoConnected.current
+    ) {
+      hasAutoConnected.current = true;
       connectToServer().catch(() => {
         // Silent fail - user can manually connect
+        // Reset flag so user can try again if they navigate away and back
+        if (isMounted.current) {
+          hasAutoConnected.current = false;
+        }
       });
     }
-  }, [localUser?.auth_token, isConnected, connectionState, connectToServer]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoading, localUser?.auth_token, isConnected, connectionState]);
 
   // Filter tabs based on partner status
   const availableTabs = TABS.filter((tab) => !tab.partnerOnly || partner);
@@ -155,12 +205,18 @@ export default function FriendsPage() {
     }
   };
 
+  // Only show loading spinner after delay to prevent flash for quick loads
+  // But don't render content while loading (prevents incomplete UI flash)
   if (isLoading) {
-    return (
-      <div className="h-full flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-indigo-400 animate-spin" />
-      </div>
-    );
+    if (showLoadingIndicator) {
+      return (
+        <div className="h-full flex items-center justify-center">
+          <Loader2 className="w-8 h-8 text-indigo-400 animate-spin" />
+        </div>
+      );
+    }
+    // During initial load delay, render nothing to prevent flash
+    return null;
   }
 
   if (showSetup) {

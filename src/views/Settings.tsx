@@ -358,7 +358,17 @@ export function Settings() {
 
   async function handleDisplayNameSave() {
     try {
+      // Save to local settings
       await invoke('update_settings', { settings: { user_display_name: userDisplayName } });
+
+      // Also sync to friends server (set_username will update server if registered)
+      try {
+        await invoke('set_username', { username: userDisplayName });
+      } catch (syncErr) {
+        // Don't fail if server sync fails - local save still worked
+        console.warn('Failed to sync display name to server:', syncErr);
+      }
+
       setMessage({ type: 'success', text: 'Display name saved!' });
     } catch (err) {
       setMessage({ type: 'error', text: `Failed to save display name: ${err}` });
@@ -427,7 +437,7 @@ export function Settings() {
               <h2 className="card-title mb-0">Profile</h2>
             </div>
             <p className="text-xs text-text-muted mb-4">
-              Your display name and avatar are used across Atlas and will sync to the server in the future.
+              Your display name syncs to the friends server. Avatar is stored locally.
             </p>
 
             <div className="flex items-start gap-6">

@@ -54,12 +54,16 @@ export function useFriends(): UseFriendsReturn {
   const [pendingActionsCount, setPendingActionsCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const isMountedRef = useRef(true);
+  const isConnectingRef = useRef(false);
 
   // Load local user data
   const loadLocalUser = useCallback(async () => {
     try {
       const user = await invoke<LocalUserData>('get_local_user');
-      setLocalUser(user);
+      if (isMountedRef.current) {
+        setLocalUser(user);
+      }
     } catch (e) {
       console.error('Failed to load local user:', e);
     }
@@ -67,10 +71,13 @@ export function useFriends(): UseFriendsReturn {
 
   // Load friends list
   const loadFriends = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
+    if (isMountedRef.current) {
+      setIsLoading(true);
+      setError(null);
+    }
     try {
       const friendsList = await invoke<FriendWithDetails[]>('get_friends_list');
+      if (!isMountedRef.current) return;
       setFriends(friendsList);
 
       // Find partner
@@ -81,19 +88,26 @@ export function useFriends(): UseFriendsReturn {
 
       // Check connection status
       const connected = await invoke<boolean>('is_friends_connected');
+      if (!isMountedRef.current) return;
       setIsConnected(connected);
 
       // Get connection state
       const state = await invoke<string>('get_friends_connection_status');
+      if (!isMountedRef.current) return;
       setConnectionState(state as ConnectionState);
 
       // Get pending actions count
       const pendingCount = await invoke<number>('get_offline_queue_count');
+      if (!isMountedRef.current) return;
       setPendingActionsCount(pendingCount);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      if (isMountedRef.current) {
+        setError(e instanceof Error ? e.message : String(e));
+      }
     } finally {
-      setIsLoading(false);
+      if (isMountedRef.current) {
+        setIsLoading(false);
+      }
     }
   }, []);
 
@@ -238,9 +252,21 @@ export function useFriends(): UseFriendsReturn {
 
   // Connect to server
   const connectToServer = useCallback(async () => {
-    setConnectionState('connecting');
+    // Prevent duplicate connection attempts
+    if (isConnectingRef.current) {
+      return;
+    }
+    isConnectingRef.current = true;
+
+    if (isMountedRef.current) {
+      setConnectionState('connecting');
+    }
     try {
       await invoke('connect_to_server');
+      if (!isMountedRef.current) {
+        isConnectingRef.current = false;
+        return;
+      }
       setConnectionState('connected');
       setIsConnected(true);
       setLastSyncTime(Date.now());
@@ -253,12 +279,20 @@ export function useFriends(): UseFriendsReturn {
       }
 
       // Reload friends to get fresh data
-      await loadFriends();
+      if (isMountedRef.current) {
+        await loadFriends();
+      }
     } catch (e) {
+      if (!isMountedRef.current) {
+        isConnectingRef.current = false;
+        return;
+      }
       const msg = e instanceof Error ? e.message : String(e);
       setConnectionState('error');
       setError(msg);
       throw new Error(msg);
+    } finally {
+      isConnectingRef.current = false;
     }
   }, [loadFriends]);
 
@@ -323,13 +357,21 @@ export function useFriends(): UseFriendsReturn {
     };
   }, []);
 
+  // Track mount state for cleanup
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   // Initial load
   useEffect(() => {
     const initialize = async () => {
-      setIsLoading(true);
+      if (isMountedRef.current) setIsLoading(true);
       await loadLocalUser();
       await loadFriends();
-      setIsLoading(false);
+      if (isMountedRef.current) setIsLoading(false);
     };
     initialize();
     // Only run once on mount
@@ -339,11 +381,14 @@ export function useFriends(): UseFriendsReturn {
   // Listen for server events
   useEffect(() => {
     const unlistenConnected = listen('friends:connected', () => {
-      setConnectionState('connected');
-      setIsConnected(true);
+      if (isMountedRef.current) {
+        setConnectionState('connected');
+        setIsConnected(true);
+      }
     });
 
     const unlistenPartnerPresence = listen<ServerPresenceResponse>('friends:partner_presence', (event) => {
+      if (!isMountedRef.current) return;
       // Update partner presence in the friends list
       setFriends((prev) => {
         return prev.map((f) => {

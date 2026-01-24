@@ -46,6 +46,12 @@ export function usePartnerPresence(): UsePartnerPresenceReturn {
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isActiveTabRef = useRef(false);
   const isPollingRef = useRef(false);
+  const partnerPresenceRef = useRef<Presence | null>(null);
+  const localPresenceRef = useRef<Presence | null>(null);
+
+  // Keep refs in sync with state
+  partnerPresenceRef.current = partnerPresence;
+  localPresenceRef.current = localPresence;
 
   // Load partner's presence
   const loadPartnerPresence = useCallback(async () => {
@@ -169,13 +175,15 @@ export function usePartnerPresence(): UsePartnerPresenceReturn {
     }, POST_MESSAGE_POLL_DELAY);
   }, [doSync]);
 
-  // Listen for presence updates
+  // Listen for presence updates (only register once)
   useEffect(() => {
     const unlisten = listen<Presence>('friends:presence_updated', (event) => {
-      // Check if it's partner's presence or local
-      if (partnerPresence && event.payload.user_id === partnerPresence.user_id) {
+      // Check if it's partner's presence or local using refs to avoid re-registration
+      const currentPartner = partnerPresenceRef.current;
+      const currentLocal = localPresenceRef.current;
+      if (currentPartner && event.payload.user_id === currentPartner.user_id) {
         setPartnerPresence(event.payload);
-      } else if (localPresence && event.payload.user_id === localPresence.user_id) {
+      } else if (currentLocal && event.payload.user_id === currentLocal.user_id) {
         setLocalPresence(event.payload);
       }
     });
@@ -197,17 +205,23 @@ export function usePartnerPresence(): UsePartnerPresenceReturn {
       unlisten.then((fn) => fn());
       unlistenPartner.then((fn) => fn());
     };
-  }, [partnerPresence, localPresence]);
+  }, []); // Empty deps - register listeners only once
+
+  // Store startPolling in a ref to avoid effect re-runs
+  const startPollingRef = useRef(startPolling);
+  const stopPollingRef = useRef(stopPolling);
+  startPollingRef.current = startPolling;
+  stopPollingRef.current = stopPolling;
 
   // Handle visibility change to pause/resume polling
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.hidden) {
         // Page is hidden, stop polling
-        stopPolling();
+        stopPollingRef.current();
       } else if (isPollingRef.current === false && isActiveTabRef.current) {
         // Page became visible and we were polling before, resume
-        startPolling(isActiveTabRef.current);
+        startPollingRef.current(isActiveTabRef.current);
       }
     };
 
@@ -215,7 +229,7 @@ export function usePartnerPresence(): UsePartnerPresenceReturn {
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [startPolling, stopPolling]);
+  }, []); // Empty deps - only register once
 
   // Initial load
   useEffect(() => {

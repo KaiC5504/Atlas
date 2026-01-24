@@ -13,6 +13,7 @@ import {
   Edit2,
 } from 'lucide-react';
 import { useFriends } from '../../hooks/useFriends';
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import type { FriendWithDetails, LocalUserData, RelationshipType } from '../../types/friends';
 import {
   getPresenceStatusColor,
@@ -42,6 +43,9 @@ export function FriendsListTab({ friends, localUser, onRefresh }: FriendsListTab
   const [validationError, setValidationError] = useState<string | null>(null);
   const [isValidating, setIsValidating] = useState(false);
   const [validatedUser, setValidatedUser] = useState<{ username: string; id: string } | null>(null);
+
+  // Remove confirmation state
+  const [friendToRemove, setFriendToRemove] = useState<{ id: string; name: string; isPartner: boolean } | null>(null);
 
   // Separate partner from friends
   const partner = friends.find((f) => f.friend.relationship_type === 'partner');
@@ -120,9 +124,14 @@ export function FriendsListTab({ friends, localUser, onRefresh }: FriendsListTab
     }
   };
 
-  const handleRemove = async (friendId: string) => {
-    if (window.confirm('Remove this friend?')) {
-      await removeFriend(friendId);
+  const handleRemove = (friendId: string, friendName: string, isPartner: boolean) => {
+    setFriendToRemove({ id: friendId, name: friendName, isPartner });
+  };
+
+  const confirmRemove = async () => {
+    if (friendToRemove) {
+      await removeFriend(friendToRemove.id);
+      setFriendToRemove(null);
       await onRefresh();
     }
   };
@@ -188,7 +197,7 @@ export function FriendsListTab({ friends, localUser, onRefresh }: FriendsListTab
           <FriendCard
             friend={partner}
             isPartner
-            onRemove={handleRemove}
+            onRemove={(id, name, isPartner) => handleRemove(id, name, isPartner)}
             onUpdateNickname={(id) => {
               setEditingNickname(id);
               setNicknameValue(partner.friend.nickname || '');
@@ -261,7 +270,7 @@ export function FriendsListTab({ friends, localUser, onRefresh }: FriendsListTab
               <FriendCard
                 key={friend.friend.id}
                 friend={friend}
-                onRemove={handleRemove}
+                onRemove={(id, name, isPartner) => handleRemove(id, name, isPartner)}
                 onUpdateNickname={(id) => {
                   setEditingNickname(id);
                   setNicknameValue(friend.friend.nickname || '');
@@ -441,6 +450,22 @@ export function FriendsListTab({ friends, localUser, onRefresh }: FriendsListTab
           </div>
         </div>
       )}
+
+      {/* Remove Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={friendToRemove !== null}
+        title={friendToRemove?.isPartner ? 'Remove Partner' : 'Remove Friend'}
+        message={
+          friendToRemove?.isPartner
+            ? `Are you sure you want to remove ${friendToRemove?.name} as your partner? This will remove access to shared memories, messages, and calendar.`
+            : `Are you sure you want to remove ${friendToRemove?.name} from your friends list?`
+        }
+        confirmLabel="Remove"
+        cancelLabel="Cancel"
+        variant="danger"
+        onConfirm={confirmRemove}
+        onCancel={() => setFriendToRemove(null)}
+      />
     </div>
   );
 }
@@ -448,7 +473,7 @@ export function FriendsListTab({ friends, localUser, onRefresh }: FriendsListTab
 interface FriendCardProps {
   friend: FriendWithDetails;
   isPartner?: boolean;
-  onRemove: (id: string) => void;
+  onRemove: (id: string, name: string, isPartner: boolean) => void;
   onUpdateNickname: (id: string) => void;
   onPoke: (userId: string, emoji: string) => void;
   editingNickname: string | null;
@@ -584,7 +609,11 @@ function FriendCard({
               </button>
               <button
                 onClick={() => {
-                  onRemove(friend.friend.id);
+                  onRemove(
+                    friend.friend.id,
+                    friend.friend.nickname || friend.user.username,
+                    isPartner || false
+                  );
                   setShowActions(false);
                 }}
                 className="w-full px-4 py-2 text-left text-sm text-red-400 hover:bg-red-500/10 flex items-center gap-2"
