@@ -6,7 +6,8 @@
 
 param(
     [switch]$Clean,
-    [switch]$SkipVenv
+    [switch]$SkipVenv,
+    [switch]$SkipML
 )
 
 $ErrorActionPreference = "Stop"
@@ -14,7 +15,10 @@ $WorkersDir = "python_workers"
 $OutputDir = "python_workers\dist"
 $VenvDir = "python_workers\.venv-build"
 
-# Workers to bundle (including ML workers)
+# ML workers that are large and slow to build (can be skipped with -SkipML)
+$MLWorkersList = @("audio_separator.py", "audio_event_detector.py", "model_enhancer.py")
+
+# Workers to bundle
 $Workers = @(
     "yt_dlp_worker.py",
     "valorant_checker.py",
@@ -22,8 +26,17 @@ $Workers = @(
     "playlist_uploader_worker.py",
     "audio_separator.py",
     "audio_event_detector.py",
-    "model_enhancer.py"
+    "model_enhancer.py",
+    "gacha_history_worker.py"
 )
+
+# Filter out ML workers if -SkipML is specified
+if ($SkipML) {
+    $Workers = $Workers | Where-Object { $_ -notin $MLWorkersList }
+    Write-Host "NOTE: Skipping ML workers (audio_separator, audio_event_detector, model_enhancer)" -ForegroundColor Yellow
+    Write-Host "      Use existing ML binaries from your local installation instead." -ForegroundColor Yellow
+    Write-Host ""
+}
 
 Write-Host "============================================" -ForegroundColor Cyan
 Write-Host "Building Python Workers as Executables" -ForegroundColor Cyan
@@ -63,13 +76,16 @@ if (-not $SkipVenv) {
     pip install --quiet -r "$WorkersDir\requirements-bundle.txt"
 
     # Install ML dependencies if requirements-ml.txt exists (for ML workers like audio_separator, audio_event_detector, model_enhancer)
-    if (Test-Path "$WorkersDir\requirements-ml.txt") {
+    # Skip if -SkipML is specified
+    if (-not $SkipML -and (Test-Path "$WorkersDir\requirements-ml.txt")) {
         Write-Host "  Installing ML dependencies..."
         # Install PyTorch with CUDA support first (CUDA 12.4 for RTX 40-series)
         Write-Host "  Installing PyTorch with CUDA 12.4 support..."
         pip install --quiet torch torchaudio --index-url https://download.pytorch.org/whl/cu124
         # Install remaining ML dependencies
         pip install --quiet -r "$WorkersDir\requirements-ml.txt"
+    } elseif ($SkipML) {
+        Write-Host "  Skipping ML dependencies (PyTorch, CUDA, etc.)" -ForegroundColor DarkGray
     }
     Write-Host "  Build environment ready!" -ForegroundColor Green
 } else {
@@ -166,6 +182,12 @@ $WorkerConfig = @{
         "--collect-all=onnx",
         "--collect-all=onnxruntime",
         "--collect-all=onnxscript"
+    )
+    "gacha_history_worker" = @(
+        "--hidden-import=requests",
+        "--hidden-import=urllib3",
+        "--hidden-import=certifi",
+        "--collect-all=certifi"
     )
 }
 

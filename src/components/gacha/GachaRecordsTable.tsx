@@ -7,6 +7,7 @@ import {
   getRarityColor,
   getRarityBgColor,
 } from '../../types/gacha';
+import { CustomSelect } from '../ui/CustomSelect';
 
 interface GachaRecordsTableProps {
   game: GachaGame;
@@ -70,38 +71,39 @@ export function GachaRecordsTable({ game, records }: GachaRecordsTableProps) {
             placeholder="Search by name..."
             value={search}
             onChange={(e) => handleFilterChange(setSearch)(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 bg-surface-base border border-border rounded-lg text-text-primary placeholder-text-tertiary focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            className="w-full pl-9 pr-4 py-2 glass border border-white/10 rounded-lg text-text-primary placeholder-text-tertiary focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
           />
         </div>
 
         {/* Rarity Filter */}
         <div className="flex items-center gap-2">
           <Filter className="w-4 h-4 text-text-tertiary" />
-          <select
+          <CustomSelect
             value={rarityFilter}
-            onChange={(e) => handleFilterChange(setRarityFilter)(e.target.value)}
-            className="bg-surface-base border border-border rounded-lg px-3 py-2 text-text-primary focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          >
-            <option value="all">All Rarities</option>
-            <option value="5">5-Star</option>
-            <option value="4">4-Star</option>
-            <option value="3">3-Star</option>
-          </select>
+            onChange={handleFilterChange(setRarityFilter)}
+            options={[
+              { value: 'all', label: 'All Rarities' },
+              { value: '5', label: '5-Star' },
+              { value: '4', label: '4-Star' },
+              { value: '3', label: '3-Star' },
+            ]}
+            className="min-w-[140px]"
+          />
         </div>
 
         {/* Banner Filter */}
-        <select
+        <CustomSelect
           value={bannerFilter}
-          onChange={(e) => handleFilterChange(setBannerFilter)(e.target.value)}
-          className="bg-surface-base border border-border rounded-lg px-3 py-2 text-text-primary focus:outline-none focus:ring-2 focus:ring-indigo-500"
-        >
-          <option value="all">All Banners</option>
-          {gachaTypes.map((type: GachaType) => (
-            <option key={type.id} value={type.id}>
-              {type.name}
-            </option>
-          ))}
-        </select>
+          onChange={handleFilterChange(setBannerFilter)}
+          options={[
+            { value: 'all', label: 'All Banners' },
+            ...gachaTypes.map((type: GachaType) => ({
+              value: type.id,
+              label: type.name,
+            })),
+          ]}
+          className="min-w-[160px]"
+        />
       </div>
 
       {/* Results Count */}
@@ -113,10 +115,10 @@ export function GachaRecordsTable({ game, records }: GachaRecordsTableProps) {
       </div>
 
       {/* Table */}
-      <div className="bg-surface-raised border border-border rounded-lg overflow-hidden">
+      <div className="glass-elevated rounded-xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-surface-base">
+            <thead className="bg-white/5">
               <tr>
                 <th className="text-left px-4 py-3 text-sm font-medium text-text-secondary">Name</th>
                 <th className="text-left px-4 py-3 text-sm font-medium text-text-secondary">Type</th>
@@ -125,7 +127,7 @@ export function GachaRecordsTable({ game, records }: GachaRecordsTableProps) {
                 <th className="text-left px-4 py-3 text-sm font-medium text-text-secondary">Time</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-border">
+            <tbody className="divide-y divide-white/10">
               {paginatedRecords.map((record) => (
                 <tr key={record.id} className="hover:bg-surface-base/50 transition-colors">
                   <td className="px-4 py-3">
@@ -171,7 +173,7 @@ export function GachaRecordsTable({ game, records }: GachaRecordsTableProps) {
             <button
               onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
               disabled={currentPage === 1}
-              className="p-2 bg-surface-base border border-border rounded-lg hover:bg-surface-raised disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="p-2 glass border border-white/10 rounded-lg hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
@@ -196,7 +198,7 @@ export function GachaRecordsTable({ game, records }: GachaRecordsTableProps) {
                     className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
                       currentPage === page
                         ? 'bg-indigo-600 text-white'
-                        : 'bg-surface-base border border-border hover:bg-surface-raised text-text-secondary'
+                        : 'glass border border-white/10 hover:bg-white/10 text-text-secondary'
                     }`}
                   >
                     {page}
@@ -208,7 +210,7 @@ export function GachaRecordsTable({ game, records }: GachaRecordsTableProps) {
             <button
               onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
               disabled={currentPage === totalPages}
-              className="p-2 bg-surface-base border border-border rounded-lg hover:bg-surface-raised disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="p-2 glass border border-white/10 rounded-lg hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               <ChevronRight className="w-4 h-4" />
             </button>

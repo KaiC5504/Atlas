@@ -78,7 +78,7 @@ export function GachaTimeline({ game, records }: GachaTimelineProps) {
             <h3 className="text-sm font-medium text-text-secondary">
               {formatDate(group.date)}
             </h3>
-            <div className="flex-1 h-px bg-border" />
+            <div className="flex-1 h-px bg-white/10" />
           </div>
 
           {/* Records */}
@@ -112,7 +112,7 @@ function TimelineItem({ record, pity, game }: TimelineItemProps) {
       className={`flex items-center gap-3 p-3 rounded-lg transition-colors ${
         isFiveStar
           ? 'bg-amber-500/10 border border-amber-500/20'
-          : 'bg-surface-raised border border-border'
+          : 'glass border border-white/10'
       }`}
     >
       {/* Rarity Icon */}
@@ -135,7 +135,7 @@ function TimelineItem({ record, pity, game }: TimelineItemProps) {
           </span>
           {isFiveStar && pity > 0 && (
             <span className="flex-shrink-0 text-xs px-1.5 py-0.5 bg-amber-500/20 text-amber-400 rounded">
-              @ {pity} pity
+              {pity} pity
             </span>
           )}
         </div>

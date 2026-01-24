@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { invoke } from '@tauri-apps/api/core';
 import {
   RefreshCw,
@@ -125,7 +126,7 @@ function GameIconDisplay({
   }
 
   return (
-    <div className={`${containerClass} flex items-center justify-center bg-surface-base rounded-xl overflow-hidden relative`}>
+    <div className={`${containerClass} flex items-center justify-center bg-white/5 rounded-xl overflow-hidden relative`}>
       <span className="text-sm font-bold text-text-tertiary">{getGameShortName(game)}</span>
       {showDropdownIndicator && (
         <div className="absolute bottom-0 right-0 bg-black/50 rounded-tl p-0.5">
@@ -162,23 +163,81 @@ export default function GachaHistory() {
   const [gameDropdownOpen, setGameDropdownOpen] = useState(false);
   const [accountDropdownOpen, setAccountDropdownOpen] = useState(false);
 
-  const gameDropdownRef = useRef<HTMLDivElement>(null);
-  const accountDropdownRef = useRef<HTMLDivElement>(null);
+  const gameTriggerRef = useRef<HTMLButtonElement>(null);
+  const accountTriggerRef = useRef<HTMLButtonElement>(null);
+  const gameDropdownPortalRef = useRef<HTMLDivElement>(null);
+  const accountDropdownPortalRef = useRef<HTMLDivElement>(null);
+  const [gameDropdownPos, setGameDropdownPos] = useState<{ top: number; left: number } | null>(null);
+  const [accountDropdownPos, setAccountDropdownPos] = useState<{ top: number; left: number; width: number } | null>(null);
+
+  // Update dropdown positions
+  const updateGameDropdownPos = useCallback(() => {
+    if (gameTriggerRef.current) {
+      const rect = gameTriggerRef.current.getBoundingClientRect();
+      setGameDropdownPos({ top: rect.bottom + 4, left: rect.left - 8 });
+    }
+  }, []);
+
+  const updateAccountDropdownPos = useCallback(() => {
+    if (accountTriggerRef.current) {
+      const rect = accountTriggerRef.current.getBoundingClientRect();
+      setAccountDropdownPos({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (gameDropdownOpen) updateGameDropdownPos();
+  }, [gameDropdownOpen, updateGameDropdownPos]);
+
+  useEffect(() => {
+    if (accountDropdownOpen) updateAccountDropdownPos();
+  }, [accountDropdownOpen, updateAccountDropdownPos]);
+
+  // Update positions on scroll/resize
+  useEffect(() => {
+    if (!gameDropdownOpen && !accountDropdownOpen) return;
+
+    const handlePositionUpdate = () => {
+      if (gameDropdownOpen) updateGameDropdownPos();
+      if (accountDropdownOpen) updateAccountDropdownPos();
+    };
+
+    window.addEventListener('scroll', handlePositionUpdate, true);
+    window.addEventListener('resize', handlePositionUpdate);
+
+    return () => {
+      window.removeEventListener('scroll', handlePositionUpdate, true);
+      window.removeEventListener('resize', handlePositionUpdate);
+    };
+  }, [gameDropdownOpen, accountDropdownOpen, updateGameDropdownPos, updateAccountDropdownPos]);
 
   // Close dropdowns when clicking outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (gameDropdownRef.current && !gameDropdownRef.current.contains(event.target as Node)) {
-        setGameDropdownOpen(false);
+      const target = event.target as Node;
+
+      // Check game dropdown
+      if (gameDropdownOpen) {
+        const clickedTrigger = gameTriggerRef.current?.contains(target);
+        const clickedDropdown = gameDropdownPortalRef.current?.contains(target);
+        if (!clickedTrigger && !clickedDropdown) {
+          setGameDropdownOpen(false);
+        }
       }
-      if (accountDropdownRef.current && !accountDropdownRef.current.contains(event.target as Node)) {
-        setAccountDropdownOpen(false);
+
+      // Check account dropdown
+      if (accountDropdownOpen) {
+        const clickedTrigger = accountTriggerRef.current?.contains(target);
+        const clickedDropdown = accountDropdownPortalRef.current?.contains(target);
+        if (!clickedTrigger && !clickedDropdown) {
+          setAccountDropdownOpen(false);
+        }
       }
     }
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  }, [gameDropdownOpen, accountDropdownOpen]);
 
   // Check if a game is detected
   const isGameDetected = (game: GachaGame) => supportedGames.some((g) => g.game === game);
@@ -256,10 +315,11 @@ export default function GachaHistory() {
       )}
 
       {/* Top Banner with Game/Account Selection */}
-      <div className="flex items-center gap-4 bg-surface-raised border border-border rounded-lg p-4">
+      <div className="flex items-center gap-4 glass-elevated rounded-xl p-4">
         {/* Game Selector Dropdown */}
-        <div className="relative" ref={gameDropdownRef}>
+        <div className="relative">
           <button
+            ref={gameTriggerRef}
             onClick={() => {
               if (hasDetectedGames) {
                 setGameDropdownOpen(!gameDropdownOpen);
@@ -268,7 +328,7 @@ export default function GachaHistory() {
             }}
             className={`flex items-center gap-2 p-1 rounded-xl transition-colors ${
               hasDetectedGames
-                ? 'hover:bg-surface-base cursor-pointer'
+                ? 'hover:bg-white/5 cursor-pointer'
                 : 'opacity-50 cursor-not-allowed'
             }`}
             disabled={!hasDetectedGames}
@@ -281,48 +341,54 @@ export default function GachaHistory() {
                 showDropdownIndicator={otherDetectedGames.length > 0}
               />
             ) : (
-              <div className="w-12 h-12 flex items-center justify-center bg-surface-base rounded-xl">
+              <div className="w-12 h-12 flex items-center justify-center bg-white/5 rounded-xl">
                 <Star className="w-6 h-6 text-text-tertiary" />
               </div>
             )}
           </button>
 
-          {/* Game Dropdown */}
-          {gameDropdownOpen && otherDetectedGames.length > 0 && (
-            <div className="absolute top-full -left-2 mt-1 p-2 bg-zinc-800 border border-border rounded-lg shadow-lg z-50">
+          {/* Game Dropdown - Portal */}
+          {gameDropdownOpen && otherDetectedGames.length > 0 && gameDropdownPos && createPortal(
+            <div
+              ref={gameDropdownPortalRef}
+              className="fixed p-2 bg-[#1a1a2e] border border-white/10 rounded-lg shadow-xl shadow-black/50 z-[9999]"
+              style={{ top: gameDropdownPos.top, left: gameDropdownPos.left }}
+            >
               <div className="flex flex-col gap-2">
                 {otherDetectedGames.map((game) => (
                   <button
                     key={game}
                     onClick={() => handleGameSelect(game)}
-                    className="p-1 rounded-xl hover:bg-surface-base transition-colors"
+                    className="p-1 rounded-xl hover:bg-white/5 transition-colors"
                     title={getGameDisplayName(game)}
                   >
                     <GameIconDisplay game={game} iconPath={getDetectedGame(game)?.icon_path ?? null} />
                   </button>
                 ))}
               </div>
-            </div>
+            </div>,
+            document.body
           )}
         </div>
 
         {/* Account Selector Dropdown */}
-        <div className="relative flex-1" ref={accountDropdownRef}>
+        <div className="relative flex-1">
           <button
+            ref={accountTriggerRef}
             onClick={() => {
               if (selectedGame && filteredAccounts.length > 0) {
                 setAccountDropdownOpen(!accountDropdownOpen);
                 setGameDropdownOpen(false);
               }
             }}
-            className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
+            className={`w-full flex items-center justify-between gap-2 px-4 py-2.5 rounded-lg bg-white/5 border border-white/10 transition-colors ${
               selectedGame && filteredAccounts.length > 0
-                ? 'hover:bg-surface-base cursor-pointer'
-                : 'cursor-default'
-            }`}
+                ? 'hover:bg-white/10 cursor-pointer'
+                : 'opacity-50 cursor-not-allowed'
+            } ${accountDropdownOpen ? 'border-indigo-500/50' : ''}`}
             disabled={!selectedGame || filteredAccounts.length === 0}
           >
-            <span className="text-text-primary font-medium">
+            <span className={selectedAccount ? 'text-text-primary' : 'text-text-tertiary'}>
               {selectedAccount ? (
                 <>UID: {selectedAccount.uid}</>
               ) : selectedGame ? (
@@ -335,14 +401,18 @@ export default function GachaHistory() {
                 'Select a game'
               )}
             </span>
-            {selectedGame && filteredAccounts.length > 1 && (
-              <ChevronDown className="w-4 h-4 text-text-tertiary" />
+            {selectedGame && filteredAccounts.length > 0 && (
+              <ChevronDown className={`w-4 h-4 text-text-tertiary transition-transform ${accountDropdownOpen ? 'rotate-180' : ''}`} />
             )}
           </button>
 
-          {/* Account Dropdown */}
-          {accountDropdownOpen && filteredAccounts.length > 0 && (
-            <div className="absolute top-full left-0 min-w-64 bg-zinc-800 border border-border rounded-lg shadow-lg z-50 overflow-hidden">
+          {/* Account Dropdown - Portal */}
+          {accountDropdownOpen && filteredAccounts.length > 0 && accountDropdownPos && createPortal(
+            <div
+              ref={accountDropdownPortalRef}
+              className="fixed py-1 min-w-64 bg-[#1a1a2e] border border-white/10 rounded-lg shadow-xl shadow-black/50 z-[9999] overflow-hidden"
+              style={{ top: accountDropdownPos.top, left: accountDropdownPos.left, width: accountDropdownPos.width }}
+            >
               {filteredAccounts.map((account) => {
                 const isSelected =
                   selectedAccount?.game === account.game &&
@@ -353,8 +423,8 @@ export default function GachaHistory() {
                   <div
                     key={deleteKey}
                     onClick={() => handleAccountSelect(account)}
-                    className={`flex items-center justify-between px-4 py-3 cursor-pointer transition-colors ${
-                      isSelected ? 'bg-indigo-500/20' : 'hover:bg-surface-base'
+                    className={`flex items-center justify-between px-4 py-2.5 cursor-pointer transition-colors ${
+                      isSelected ? 'bg-indigo-500/20 text-indigo-400' : 'hover:bg-white/10'
                     }`}
                   >
                     <div className="flex items-center gap-3">
@@ -381,7 +451,7 @@ export default function GachaHistory() {
                             e.stopPropagation();
                             setDeleteConfirm(null);
                           }}
-                          className="text-xs px-2 py-1 bg-surface-base rounded hover:bg-surface-raised"
+                          className="text-xs px-2 py-1 bg-white/5 rounded hover:bg-white/10"
                         >
                           Cancel
                         </button>
@@ -400,7 +470,8 @@ export default function GachaHistory() {
                   </div>
                 );
               })}
-            </div>
+            </div>,
+            document.body
           )}
         </div>
 
@@ -430,7 +501,7 @@ export default function GachaHistory() {
           <>
             {/* Sync Progress */}
             {isSyncing && syncProgress && syncProgress.game === selectedGame && (
-              <div className="bg-surface-raised border border-border rounded-lg p-4 mb-4">
+              <div className="glass-elevated rounded-xl p-4 mb-4">
                 <div className="flex items-center gap-2 mb-2">
                   <Loader2 className="w-4 h-4 text-indigo-400 animate-spin" />
                   <span className="text-sm text-text-primary">
@@ -438,7 +509,7 @@ export default function GachaHistory() {
                   </span>
                 </div>
                 <div className="text-xs text-text-tertiary mb-2">{syncProgress.stage}</div>
-                <div className="h-2 bg-surface-base rounded-full overflow-hidden">
+                <div className="h-2 bg-white/5 rounded-full overflow-hidden">
                   <div
                     className="h-full bg-indigo-500 transition-all"
                     style={{ width: `${syncProgress.percent}%` }}
@@ -450,7 +521,7 @@ export default function GachaHistory() {
             {selectedAccount && history && stats ? (
               <>
                 {/* Tabs */}
-                <div className="flex gap-1 p-1 bg-surface-raised border border-border rounded-lg mb-4">
+                <div className="flex gap-1 p-1 glass-elevated rounded-xl mb-4">
                   {TABS.map((tab) => (
                     <button
                       key={tab.id}
@@ -458,7 +529,7 @@ export default function GachaHistory() {
                       className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                         activeTab === tab.id
                           ? 'bg-indigo-600 text-white'
-                          : 'text-text-secondary hover:text-text-primary hover:bg-surface-base'
+                          : 'text-text-secondary hover:text-text-primary hover:bg-white/5'
                       }`}
                     >
                       {tab.icon}

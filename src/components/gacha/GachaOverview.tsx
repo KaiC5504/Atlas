@@ -13,6 +13,12 @@ interface GachaOverviewProps {
   stats: GachaStats;
 }
 
+const BANNER_ORDER: Record<GachaGame, string[]> = {
+  genshin: ['301', '302', '200', '100', '500'],
+  star_rail: ['11', '12', '1', '2'],
+  zzz: ['2001', '3001', '1001', '5001'],
+};
+
 export function GachaOverview({ game, stats }: GachaOverviewProps) {
   const fiveStarRate = calculateFiveStarRate(stats);
   const fourStarRate = calculateFourStarRate(stats);
@@ -53,14 +59,19 @@ export function GachaOverview({ game, stats }: GachaOverviewProps) {
       <div className="space-y-4">
         <h3 className="text-lg font-medium text-text-primary">Banner Statistics</h3>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {Object.entries(stats.banner_stats).map(([gachaType, bannerStats]) => (
-            <BannerStatCard
-              key={gachaType}
-              game={game}
-              gachaType={gachaType}
-              stats={bannerStats}
-            />
-          ))}
+          {Object.entries(stats.banner_stats)
+            .sort(([a], [b]) => {
+              const order = BANNER_ORDER[game] || [];
+              return order.indexOf(a) - order.indexOf(b);
+            })
+            .map(([gachaType, bannerStats]) => (
+              <BannerStatCard
+                key={gachaType}
+                game={game}
+                gachaType={gachaType}
+                stats={bannerStats}
+              />
+            ))}
         </div>
       </div>
     </div>
@@ -77,7 +88,7 @@ interface StatCardProps {
 
 function StatCard({ icon, label, value, subtext, color }: StatCardProps) {
   return (
-    <div className="bg-surface-raised border border-border rounded-lg p-4">
+    <div className="card">
       <div className="flex items-center gap-2 text-text-secondary mb-2">
         <span className={color}>{icon}</span>
         <span className="text-sm">{label}</span>
@@ -106,7 +117,7 @@ function BannerStatCard({ game, gachaType, stats }: BannerStatCardProps) {
   const isInSoftPity = stats.current_pity >= softPity;
 
   return (
-    <div className="bg-surface-raised border border-border rounded-lg p-4">
+    <div className="card">
       <div className="flex items-center justify-between mb-4">
         <h4 className="font-medium text-text-primary">{bannerName}</h4>
         <span className="text-sm text-text-secondary">
@@ -125,7 +136,7 @@ function BannerStatCard({ game, gachaType, stats }: BannerStatCardProps) {
             {stats.current_pity} / {hardPity}
           </span>
         </div>
-        <div className="h-2 bg-surface-base rounded-full overflow-hidden">
+        <div className="h-2 bg-white/5 rounded-full overflow-hidden">
           <div
             className={`h-full rounded-full transition-all ${
               isInSoftPity
@@ -144,15 +155,15 @@ function BannerStatCard({ game, gachaType, stats }: BannerStatCardProps) {
 
       {/* Stats Grid */}
       <div className="grid grid-cols-3 gap-2 text-center">
-        <div className="bg-surface-base rounded p-2">
+        <div className="bg-white/5 rounded p-2">
           <div className="text-amber-400 font-bold">{stats.five_star_count}</div>
           <div className="text-xs text-text-tertiary">5-Star</div>
         </div>
-        <div className="bg-surface-base rounded p-2">
+        <div className="bg-white/5 rounded p-2">
           <div className="text-purple-400 font-bold">{stats.four_star_count}</div>
           <div className="text-xs text-text-tertiary">4-Star</div>
         </div>
-        <div className="bg-surface-base rounded p-2">
+        <div className="bg-white/5 rounded p-2">
           <div className="text-text-primary font-bold">
             {stats.average_pity > 0 ? stats.average_pity.toFixed(1) : '-'}
           </div>
@@ -162,13 +173,13 @@ function BannerStatCard({ game, gachaType, stats }: BannerStatCardProps) {
 
       {/* Recent 5-Stars */}
       {stats.five_star_pulls.length > 0 && (
-        <div className="mt-4 pt-4 border-t border-border">
+        <div className="mt-4 pt-4 border-t border-white/10">
           <h5 className="text-sm text-text-secondary mb-2">Recent 5-Stars</h5>
           <div className="space-y-1">
             {stats.five_star_pulls.slice(-3).reverse().map((pull, idx) => (
               <div key={idx} className="flex items-center justify-between text-sm">
                 <span className="text-amber-400">{pull.name}</span>
-                <span className="text-text-tertiary">@ {pull.pity} pity</span>
+                <span className="text-text-tertiary">{pull.pity} pity</span>
               </div>
             ))}
           </div>

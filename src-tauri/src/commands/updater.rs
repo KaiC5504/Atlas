@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
+use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_updater::UpdaterExt;
 use time::format_description::well_known::Rfc3339;
@@ -58,6 +60,11 @@ pub async fn download_update(app: AppHandle) -> Result<(), String> {
 
     let _ = app.emit("update:downloading", ());
 
+    // Throttle progress events to prevent overwhelming the frontend
+    let last_emit = std::sync::Mutex::new(Instant::now());
+    let last_percent = AtomicU64::new(0);
+    let throttle_duration = Duration::from_millis(100); // Emit at most every 100ms
+
     let bytes = update
         .download(
             |downloaded, total| {
@@ -68,13 +75,30 @@ pub async fn download_update(app: AppHandle) -> Result<(), String> {
                     0
                 };
 
-                let progress = UpdateProgress {
-                    downloaded: downloaded as u64,
-                    total: total_bytes,
-                    percent,
+                // Check if we should emit this progress update
+                let should_emit = {
+                    let mut last = last_emit.lock().unwrap();
+                    let now = Instant::now();
+                    let prev_percent = last_percent.load(Ordering::Relaxed);
+
+                    // Emit if: enough time has passed OR percent changed significantly
+                    if now.duration_since(*last) >= throttle_duration || percent as u64 != prev_percent {
+                        *last = now;
+                        last_percent.store(percent as u64, Ordering::Relaxed);
+                        true
+                    } else {
+                        false
+                    }
                 };
 
-                let _ = app_handle.emit("update:progress", progress);
+                if should_emit {
+                    let progress = UpdateProgress {
+                        downloaded: downloaded as u64,
+                        total: total_bytes,
+                        percent,
+                    };
+                    let _ = app_handle.emit("update:progress", progress);
+                }
             },
             || {
                 let _ = app_handle_complete.emit("update:downloaded", ());

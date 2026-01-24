@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import type {
@@ -10,6 +10,10 @@ import type {
   RefreshGachaRequest,
   UigfExport,
 } from '../types/gacha';
+
+// LocalStorage keys for persisting user selection
+const STORAGE_KEY_GAME = 'gacha_selected_game';
+const STORAGE_KEY_UID = 'gacha_selected_uid';
 
 export interface GachaProgress {
   game: GachaGame;
@@ -56,6 +60,9 @@ export function useGachaHistory(): UseGachaHistoryReturn {
   const [syncProgress, setSyncProgress] = useState<GachaProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Track if we've restored from localStorage
+  const hasRestoredSelection = useRef(false);
+
   // Computed: filter accounts by selected game
   const filteredAccounts = selectedGame
     ? accounts.filter((acc) => acc.game === selectedGame)
@@ -100,11 +107,19 @@ export function useGachaHistory(): UseGachaHistoryReturn {
     (game: GachaGame | null) => {
       setSelectedGame(game);
 
+      // Persist to localStorage
+      if (game) {
+        localStorage.setItem(STORAGE_KEY_GAME, game);
+      } else {
+        localStorage.removeItem(STORAGE_KEY_GAME);
+      }
+
       // Clear selected account if it doesn't match the new game
       if (game && selectedAccount && selectedAccount.game !== game) {
         setSelectedAccount(null);
         setHistory(null);
         setStats(null);
+        localStorage.removeItem(STORAGE_KEY_UID);
       }
     },
     [selectedAccount]
@@ -113,6 +128,13 @@ export function useGachaHistory(): UseGachaHistoryReturn {
   // Select an account and load its history
   const selectAccount = useCallback(async (account: GachaAccount | null) => {
     setSelectedAccount(account);
+
+    // Persist to localStorage
+    if (account) {
+      localStorage.setItem(STORAGE_KEY_UID, account.uid);
+    } else {
+      localStorage.removeItem(STORAGE_KEY_UID);
+    }
 
     if (!account) {
       setHistory(null);
@@ -190,6 +212,7 @@ export function useGachaHistory(): UseGachaHistoryReturn {
         setSelectedAccount(null);
         setHistory(null);
         setStats(null);
+        localStorage.removeItem(STORAGE_KEY_UID);
       }
 
       // Reload accounts
@@ -232,6 +255,42 @@ export function useGachaHistory(): UseGachaHistoryReturn {
     loadAccounts();
     loadSupportedGames();
   }, [loadAccounts, loadSupportedGames]);
+
+  // Restore selection from localStorage after initial data is loaded
+  useEffect(() => {
+    // Only restore once, and only after we have data to work with
+    if (hasRestoredSelection.current) return;
+    if (supportedGames.length === 0) return;
+
+    hasRestoredSelection.current = true;
+
+    const savedGame = localStorage.getItem(STORAGE_KEY_GAME) as GachaGame | null;
+    const savedUid = localStorage.getItem(STORAGE_KEY_UID);
+
+    // Check if the saved game is still detected/supported
+    const isGameSupported = savedGame && supportedGames.some((g) => g.game === savedGame);
+
+    if (isGameSupported && savedGame) {
+      // Set the game without triggering localStorage write (already saved)
+      setSelectedGame(savedGame);
+
+      // If we have accounts and a saved UID, try to restore the account selection
+      if (savedUid && accounts.length > 0) {
+        const savedAccount = accounts.find(
+          (acc) => acc.game === savedGame && acc.uid === savedUid
+        );
+        if (savedAccount) {
+          // Load the account's history
+          selectAccount(savedAccount);
+        }
+      }
+    } else if (supportedGames.length > 0) {
+      // No saved game or saved game not supported - auto-select first detected game
+      const firstGame = supportedGames[0].game;
+      setSelectedGame(firstGame);
+      localStorage.setItem(STORAGE_KEY_GAME, firstGame);
+    }
+  }, [supportedGames, accounts, selectAccount]);
 
   return {
     accounts,

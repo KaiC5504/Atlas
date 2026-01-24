@@ -174,7 +174,7 @@ export function GachaExport({ accounts, history, onExport, onImport }: GachaExpo
       )}
 
       {/* Export Section */}
-      <div className="bg-surface-raised border border-border rounded-lg p-4">
+      <div className="card">
         <h3 className="text-lg font-medium text-text-primary mb-4 flex items-center gap-2">
           <Download className="w-5 h-5" />
           Export
@@ -211,7 +211,7 @@ export function GachaExport({ accounts, history, onExport, onImport }: GachaExpo
                     className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors ${
                       isSelected
                         ? 'bg-indigo-500/10 border border-indigo-500/20'
-                        : 'bg-surface-base border border-border hover:border-border-hover'
+                        : 'bg-white/5 border border-white/10 hover:border-white/20'
                     }`}
                   >
                     <input
@@ -248,7 +248,7 @@ export function GachaExport({ accounts, history, onExport, onImport }: GachaExpo
           <button
             onClick={handleExportCsv}
             disabled={isExporting || !history}
-            className="flex items-center gap-2 px-4 py-2 bg-surface-base border border-border hover:bg-surface-raised disabled:opacity-50 text-text-primary rounded-lg transition-colors"
+            className="flex items-center gap-2 px-4 py-2 glass border border-white/10 hover:bg-white/10 disabled:opacity-50 text-text-primary rounded-lg transition-colors"
           >
             <FileSpreadsheet className="w-4 h-4" />
             Export Current Account (CSV)
@@ -257,7 +257,7 @@ export function GachaExport({ accounts, history, onExport, onImport }: GachaExpo
       </div>
 
       {/* Import Section */}
-      <div className="bg-surface-raised border border-border rounded-lg p-4">
+      <div className="card">
         <h3 className="text-lg font-medium text-text-primary mb-4 flex items-center gap-2">
           <Upload className="w-5 h-5" />
           Import
@@ -279,7 +279,7 @@ export function GachaExport({ accounts, history, onExport, onImport }: GachaExpo
         <button
           onClick={handleImportClick}
           disabled={isImporting}
-          className="flex items-center gap-2 px-4 py-2 bg-surface-base border border-border hover:bg-surface-raised disabled:opacity-50 text-text-primary rounded-lg transition-colors"
+          className="flex items-center gap-2 px-4 py-2 glass border border-white/10 hover:bg-white/10 disabled:opacity-50 text-text-primary rounded-lg transition-colors"
         >
           <FileJson className="w-4 h-4" />
           {isImporting ? 'Importing...' : 'Import UIGF (JSON)'}

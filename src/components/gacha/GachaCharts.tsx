@@ -74,7 +74,7 @@ export function GachaCharts({ game, records, stats }: GachaChartsProps) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       {/* Rarity Distribution Pie Chart */}
-      <div className="bg-surface-raised border border-border rounded-lg p-4">
+      <div className="card">
         <h3 className="text-lg font-medium text-text-primary mb-4">Rarity Distribution</h3>
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
@@ -108,7 +108,7 @@ export function GachaCharts({ game, records, stats }: GachaChartsProps) {
       </div>
 
       {/* Banner Comparison Bar Chart */}
-      <div className="bg-surface-raised border border-border rounded-lg p-4">
+      <div className="card">
         <h3 className="text-lg font-medium text-text-primary mb-4">Banner Comparison</h3>
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
@@ -136,7 +136,7 @@ export function GachaCharts({ game, records, stats }: GachaChartsProps) {
       </div>
 
       {/* Pulls Over Time Line Chart */}
-      <div className="bg-surface-raised border border-border rounded-lg p-4 lg:col-span-2">
+      <div className="card lg:col-span-2">
         <h3 className="text-lg font-medium text-text-primary mb-4">Pulls Over Time</h3>
         <div className="h-64">
           {timelineData.length > 0 ? (
@@ -187,7 +187,7 @@ export function GachaCharts({ game, records, stats }: GachaChartsProps) {
       </div>
 
       {/* 5-Star Timeline */}
-      <div className="bg-surface-raised border border-border rounded-lg p-4 lg:col-span-2">
+      <div className="card lg:col-span-2">
         <h3 className="text-lg font-medium text-text-primary mb-4">5-Star Pull Timeline</h3>
         <FiveStarTimeline records={records} game={game} />
       </div>
@@ -241,8 +241,8 @@ function FiveStarTimeline({ records, game }: FiveStarTimelineProps) {
               <div className="w-12 h-12 rounded-full bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center text-white font-bold text-lg shadow-lg">
                 {idx + 1}
               </div>
-              <div className="absolute -bottom-1 -right-1 bg-surface-base border border-border rounded-full px-1.5 py-0.5 text-xs font-medium text-amber-400">
-                @{pity}
+              <div className="absolute -bottom-1 -right-1 bg-white/5 border border-white/10 rounded-full px-1.5 py-0.5 text-xs font-medium text-amber-400">
+                {pity}
               </div>
             </div>
             <div className="text-center">

@@ -1,9 +1,11 @@
 # build-release.ps1 - Build Atlas for release with update signing
 # Usage: .\scripts\build-release.ps1 -Version "1.0.1"
+# Usage: .\scripts\build-release.ps1 -Version "1.0.1" -SkipML   # Fast build without ML workers
 
 param(
     [Parameter(Mandatory=$true)]
-    [string]$Version
+    [string]$Version,
+    [switch]$SkipML
 )
 
 $ErrorActionPreference = "Stop"
@@ -11,6 +13,11 @@ $ErrorActionPreference = "Stop"
 Write-Host "============================================" -ForegroundColor Cyan
 Write-Host "Building Atlas v$Version for release..." -ForegroundColor Cyan
 Write-Host "============================================" -ForegroundColor Cyan
+if ($SkipML) {
+    Write-Host "MODE: Fast build (skipping ML workers)" -ForegroundColor Yellow
+    Write-Host "  ML workers (audio_separator, audio_event_detector, model_enhancer)" -ForegroundColor DarkGray
+    Write-Host "  will NOT be bundled. Use your local ML installation instead." -ForegroundColor DarkGray
+}
 Write-Host ""
 
 # 0. Verify signing key is set
@@ -67,7 +74,11 @@ Write-Host "[3/7] Building Python workers..." -ForegroundColor Cyan
 Write-Host "  Compiling Python workers into standalone executables..." -ForegroundColor Yellow
 
 try {
-    & ".\scripts\build-python-workers.ps1"
+    if ($SkipML) {
+        & ".\scripts\build-python-workers.ps1" -SkipML
+    } else {
+        & ".\scripts\build-python-workers.ps1"
+    }
     if ($LASTEXITCODE -ne 0) {
         Write-Host "ERROR: Python worker build failed!" -ForegroundColor Red
         exit 1
