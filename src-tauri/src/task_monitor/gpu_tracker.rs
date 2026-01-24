@@ -1,8 +1,13 @@
 use log::{debug, warn};
 use nvml_wrapper::Nvml;
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::RwLock;
 use std::time::{Duration, Instant};
+
+/// Global flag to skip expensive GPU process queries during gaming
+/// This is set by the GamingSessionManager when a session starts/ends
+pub static GAMING_ACTIVE: AtomicBool = AtomicBool::new(false);
 
 /// Cached GPU process data to avoid excessive NVML queries
 pub struct GpuProcessTracker {
@@ -112,6 +117,15 @@ impl GpuProcessTracker {
     }
 
     pub fn get_all_gpu_usage(&self) -> HashMap<u32, f32> {
+        // Skip expensive NVML queries during gaming to minimize FPS impact
+        // Just return cached data (which may be stale, but that's acceptable during gaming)
+        if GAMING_ACTIVE.load(Ordering::Relaxed) {
+            if let Ok(cache) = self.cache.read() {
+                return cache.data.clone();
+            }
+            return HashMap::new();
+        }
+
         {
             if let Ok(cache) = self.cache.read() {
                 if cache.last_update.elapsed() > Duration::from_secs(2) {

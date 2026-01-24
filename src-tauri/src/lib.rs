@@ -120,6 +120,7 @@ pub fn run() {
     let detection_state = Arc::new(GameDetectionState::default());
     let bottleneck_analyzer = Arc::new(BottleneckAnalyzer::new());
     let shared_metrics = Arc::new(SharedMetrics::new());
+    let monitoring_state = Arc::new(MonitoringState::default());
     let playtime_tracker_state = Arc::new(PlaytimeTrackerState::new());
     let discord_manager = Arc::new(DiscordPresenceManager::new());
 
@@ -177,7 +178,7 @@ pub fn run() {
                 }
             }
         })
-        .manage(Arc::new(MonitoringState::default()))
+        .manage(monitoring_state.clone())
         .manage(detection_state.clone())
         .manage(bottleneck_analyzer.clone())
         .manage(shared_metrics.clone())
@@ -273,6 +274,7 @@ pub fn run() {
                 bottleneck_analyzer.clone(),
                 shared_metrics.clone(),
                 discord_manager.clone(),
+                monitoring_state.clone(),
             ));
             app.manage(session_manager);
             Ok(())

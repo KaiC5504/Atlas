@@ -12,7 +12,8 @@ use crate::models::gaming::{
     GamingSession, GamingSessionData, MetricStats, MetricsSnapshot, SessionStatus,
     SessionSummary, TopCoreInfo, BottleneckBreakdown,
 };
-use crate::performance::SharedMetrics;
+use crate::performance::{MonitoringState, SharedMetrics};
+use crate::task_monitor::gpu_tracker::GAMING_ACTIVE;
 use crate::utils::{get_gaming_sessions_json_path, get_session_data_path};
 use super::bottleneck::BottleneckAnalyzer;
 
@@ -32,6 +33,7 @@ pub struct GamingSessionManager {
     bottleneck_analyzer: Arc<BottleneckAnalyzer>,
     shared_metrics: Arc<SharedMetrics>,
     discord: Arc<DiscordPresenceManager>,
+    monitoring_state: Arc<MonitoringState>,
 }
 
 impl GamingSessionManager {
@@ -40,6 +42,7 @@ impl GamingSessionManager {
         bottleneck_analyzer: Arc<BottleneckAnalyzer>,
         shared_metrics: Arc<SharedMetrics>,
         discord: Arc<DiscordPresenceManager>,
+        monitoring_state: Arc<MonitoringState>,
     ) -> Self {
         Self {
             app,
@@ -47,6 +50,7 @@ impl GamingSessionManager {
             bottleneck_analyzer,
             shared_metrics,
             discord,
+            monitoring_state,
         }
     }
 
@@ -72,6 +76,10 @@ impl GamingSessionManager {
         };
 
         self.add_session_to_list(&session)?;
+
+        // Enable gaming mode to reduce monitoring overhead
+        self.monitoring_state.gaming_active.store(true, Ordering::Relaxed);
+        GAMING_ACTIVE.store(true, Ordering::Relaxed);
 
         // Update Discord Rich Presence
         let _ = self.discord.update_gaming_presence(game_name, &BottleneckType::Balanced);
@@ -107,6 +115,17 @@ impl GamingSessionManager {
         }
 
         thread::spawn(move || {
+            // Set thread priority to BELOW_NORMAL on Windows to avoid competing with game threads
+            #[cfg(windows)]
+            {
+                use windows_sys::Win32::System::Threading::{
+                    GetCurrentThread, SetThreadPriority, THREAD_PRIORITY_BELOW_NORMAL,
+                };
+                unsafe {
+                    SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL);
+                }
+            }
+
             thread::sleep(Duration::from_millis(500));
 
             const WARMUP_SAMPLES: u32 = 3;
@@ -232,6 +251,10 @@ impl GamingSessionManager {
     ) -> Result<GamingSession, String> {
         if let Some(mut data) = guard.take() {
             data.is_recording.store(false, Ordering::SeqCst);
+
+            // Disable gaming mode to restore normal monitoring frequency
+            self.monitoring_state.gaming_active.store(false, Ordering::Relaxed);
+            GAMING_ACTIVE.store(false, Ordering::Relaxed);
 
             thread::sleep(Duration::from_millis(100));
 

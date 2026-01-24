@@ -12,12 +12,15 @@ use tauri::{AppHandle, Emitter};
 /// State for tracking if monitoring is active
 pub struct MonitoringState {
     pub is_running: Arc<AtomicBool>,
+    /// Gaming mode flag - when true, reduces NVML polling frequency to minimize FPS impact
+    pub gaming_active: Arc<AtomicBool>,
 }
 
 impl Default for MonitoringState {
     fn default() -> Self {
         Self {
             is_running: Arc::new(AtomicBool::new(false)),
+            gaming_active: Arc::new(AtomicBool::new(false)),
         }
     }
 }
@@ -182,6 +185,7 @@ pub fn start_monitoring(app: AppHandle, state: Arc<MonitoringState>, shared_metr
     info!("Starting performance monitoring...");
 
     let is_running = state.is_running.clone();
+    let gaming_active = state.gaming_active.clone();
 
     // Spawn monitoring thread
     thread::spawn(move || {
@@ -220,8 +224,14 @@ pub fn start_monitoring(app: AppHandle, state: Arc<MonitoringState>, shared_metr
                 warn!("Failed to emit performance update: {}", e);
             }
 
-            // Wait 1 second before next collection
-            thread::sleep(Duration::from_secs(1));
+            // Gaming mode: 3 seconds to reduce GPU driver interruptions
+            // Normal mode: 1 second for responsive monitoring
+            let interval = if gaming_active.load(Ordering::Relaxed) {
+                Duration::from_secs(3)
+            } else {
+                Duration::from_secs(1)
+            };
+            thread::sleep(interval);
         }
 
         debug!("Performance monitoring stopped");
