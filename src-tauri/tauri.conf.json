@@ -25,7 +25,10 @@
                                  "assetProtocol":  {
                                                        "enable":  true,
                                                        "scope":  [
-                                                                     "$APPLOCALDATA/**"
+                                                                     "$APPLOCALDATA/**",
+                                                                     "$APPDATA/**",
+                                                                     "$APPDATA/Atlas/**",
+                                                                     "**"
                                                                  ]
                                                    }
                              }

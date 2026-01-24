@@ -26,6 +26,18 @@ export interface Settings {
   run_on_startup: boolean;
   close_to_tray: boolean;
   auto_restore_enabled: boolean;
+  /** Selected gacha accounts for each game (game -> uid) */
+  selected_gacha_accounts: Record<string, string> | null;
+  /** User's display name for profile */
+  user_display_name: string | null;
+  /** Path to the user's avatar image (stored locally) */
+  user_avatar_path: string | null;
+  /** Whether the floating partner widget is enabled */
+  partner_widget_enabled: boolean;
+  /** X position of the floating partner widget */
+  partner_widget_position_x: number | null;
+  /** Y position of the floating partner widget */
+  partner_widget_position_y: number | null;
 }
 
 export interface UpdateSettingsParams {
@@ -44,4 +56,10 @@ export interface UpdateSettingsParams {
   run_on_startup?: boolean;
   close_to_tray?: boolean;
   auto_restore_enabled?: boolean;
+  selected_gacha_accounts?: Record<string, string>;
+  user_display_name?: string;
+  user_avatar_path?: string;
+  partner_widget_enabled?: boolean;
+  partner_widget_position_x?: number;
+  partner_widget_position_y?: number;
 }

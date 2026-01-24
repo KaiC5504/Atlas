@@ -278,6 +278,7 @@ dependencies = [
  "log",
  "nvml-wrapper",
  "parking_lot",
+ "rand 0.8.5",
  "serde",
  "serde_json",
  "sysinfo",
@@ -5505,6 +5506,8 @@ dependencies = [
  "once_cell",
  "rustls",
  "rustls-pki-types",
+ "serde",
+ "serde_json",
  "url",
  "webpki-roots 0.26.11",
 ]

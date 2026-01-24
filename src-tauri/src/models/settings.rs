@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ValorantCredentials {
@@ -34,6 +35,28 @@ pub struct Settings {
     pub close_to_tray: bool,
     #[serde(default)]
     pub auto_restore_enabled: bool,
+    /// Selected gacha accounts for each game (game -> uid)
+    #[serde(default)]
+    pub selected_gacha_accounts: Option<HashMap<String, String>>,
+    /// User's display name for the profile
+    #[serde(default)]
+    pub user_display_name: Option<String>,
+    /// Path to the user's avatar image (stored locally)
+    #[serde(default)]
+    pub user_avatar_path: Option<String>,
+    /// Whether the floating partner widget is enabled
+    #[serde(default = "default_partner_widget_enabled")]
+    pub partner_widget_enabled: bool,
+    /// X position of the floating partner widget
+    #[serde(default)]
+    pub partner_widget_position_x: Option<f64>,
+    /// Y position of the floating partner widget
+    #[serde(default)]
+    pub partner_widget_position_y: Option<f64>,
+}
+
+fn default_partner_widget_enabled() -> bool {
+    true
 }
 
 impl Default for Settings {
@@ -54,6 +77,12 @@ impl Default for Settings {
             run_on_startup: false,
             close_to_tray: false,
             auto_restore_enabled: false,
+            selected_gacha_accounts: None,
+            user_display_name: None,
+            user_avatar_path: None,
+            partner_widget_enabled: true,
+            partner_widget_position_x: None,
+            partner_widget_position_y: None,
         }
     }
 }

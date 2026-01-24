@@ -12,6 +12,14 @@
     "dialog:default",
     "fs:default",
     "fs:allow-write-text-file",
+    "fs:allow-read-file",
+    {
+      "identifier": "fs:scope",
+      "allow": [
+        "$APPDATA/**",
+        "$APPLOCALDATA/**"
+      ]
+    },
     "autostart:allow-enable",
     "autostart:allow-disable",
     "autostart:allow-is-enabled",

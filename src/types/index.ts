@@ -11,3 +11,4 @@ export * from './updater';
 export * from './gameLauncher';
 export * from './playlistUploader';
 export * from './gacha';
+export * from './friends';

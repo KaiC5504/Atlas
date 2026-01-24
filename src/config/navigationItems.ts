@@ -12,6 +12,7 @@ import {
   Music2,
   ListTodo,
   Star,
+  Heart,
 } from 'lucide-react';
 
 export type NavigationItemId =
@@ -26,6 +27,7 @@ export type NavigationItemId =
   | 'playlist-uploader'
   | 'tasks'
   | 'gacha'
+  | 'friends'
   | 'settings';
 
 export interface NavigationItemConfig {
@@ -114,6 +116,13 @@ export const NAVIGATION_ITEMS: Record<NavigationItemId, NavigationItemConfig> = 
     icon: Star,
     isDeveloperOnly: false,
   },
+  friends: {
+    id: 'friends',
+    label: 'Partner',
+    to: '/friends',
+    icon: Heart,
+    isDeveloperOnly: false,
+  },
   settings: {
     id: 'settings',
     label: 'Settings',
@@ -126,6 +135,7 @@ export const NAVIGATION_ITEMS: Record<NavigationItemId, NavigationItemConfig> = 
 export const DEFAULT_ORDER: NavigationItemId[] = [
   'library',
   'gacha',
+  'friends',
   'gaming',
   'tasks',
   'performance',
@@ -141,6 +151,7 @@ export const DEFAULT_DEVELOPER_ORDER: NavigationItemId[] = [
   'playlist-uploader',
   'library',
   'gacha',
+  'friends',
   'gaming',
   'tasks',
   'performance',

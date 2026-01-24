@@ -15,6 +15,34 @@ import type {
 const STORAGE_KEY_GAME = 'gacha_selected_game';
 const STORAGE_KEY_UID = 'gacha_selected_uid';
 
+// Module-level cache to persist data across component mounts
+interface GachaCache {
+  accounts: GachaAccount[];
+  supportedGames: DetectedGachaGame[];
+  selectedGame: GachaGame | null;
+  selectedAccount: GachaAccount | null;
+  history: GachaHistory | null;
+  stats: GachaStats | null;
+  historyByAccount: Map<string, { history: GachaHistory; stats: GachaStats }>;
+  initialized: boolean;
+}
+
+const cache: GachaCache = {
+  accounts: [],
+  supportedGames: [],
+  selectedGame: null,
+  selectedAccount: null,
+  history: null,
+  stats: null,
+  historyByAccount: new Map(),
+  initialized: false,
+};
+
+// Helper to create cache key for account data
+function getAccountCacheKey(game: GachaGame, uid: string): string {
+  return `${game}:${uid}`;
+}
+
 export interface GachaProgress {
   game: GachaGame;
   stage: string;
@@ -49,19 +77,21 @@ export interface UseGachaHistoryReturn {
 }
 
 export function useGachaHistory(): UseGachaHistoryReturn {
-  const [accounts, setAccounts] = useState<GachaAccount[]>([]);
-  const [selectedAccount, setSelectedAccount] = useState<GachaAccount | null>(null);
-  const [selectedGame, setSelectedGame] = useState<GachaGame | null>(null);
-  const [history, setHistory] = useState<GachaHistory | null>(null);
-  const [stats, setStats] = useState<GachaStats | null>(null);
-  const [supportedGames, setSupportedGames] = useState<DetectedGachaGame[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  // Initialize state from cache if available
+  const [accounts, setAccounts] = useState<GachaAccount[]>(cache.accounts);
+  const [selectedAccount, setSelectedAccount] = useState<GachaAccount | null>(cache.selectedAccount);
+  const [selectedGame, setSelectedGame] = useState<GachaGame | null>(cache.selectedGame);
+  const [history, setHistory] = useState<GachaHistory | null>(cache.history);
+  const [stats, setStats] = useState<GachaStats | null>(cache.stats);
+  const [supportedGames, setSupportedGames] = useState<DetectedGachaGame[]>(cache.supportedGames);
+  // Only show loading state if we don't have cached data
+  const [isLoading, setIsLoading] = useState(!cache.initialized);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncProgress, setSyncProgress] = useState<GachaProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Track if we've restored from localStorage
-  const hasRestoredSelection = useRef(false);
+  const hasRestoredSelection = useRef(cache.initialized);
 
   // Computed: filter accounts by selected game
   const filteredAccounts = selectedGame
@@ -70,11 +100,15 @@ export function useGachaHistory(): UseGachaHistoryReturn {
 
   // Load all saved accounts
   const loadAccounts = useCallback(async () => {
-    setIsLoading(true);
+    // Only show loading if we have no cached data
+    if (cache.accounts.length === 0) {
+      setIsLoading(true);
+    }
     setError(null);
     try {
       const accs = await invoke<GachaAccount[]>('get_gacha_accounts');
       setAccounts(accs);
+      cache.accounts = accs;
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -87,6 +121,7 @@ export function useGachaHistory(): UseGachaHistoryReturn {
     try {
       const games = await invoke<DetectedGachaGame[]>('get_gacha_supported_games');
       setSupportedGames(games);
+      cache.supportedGames = games;
     } catch (e) {
       console.error('Failed to load supported games:', e);
     }
@@ -97,6 +132,7 @@ export function useGachaHistory(): UseGachaHistoryReturn {
     try {
       const games = await invoke<DetectedGachaGame[]>('refresh_gacha_games_cache');
       setSupportedGames(games);
+      cache.supportedGames = games;
     } catch (e) {
       console.error('Failed to refresh supported games:', e);
     }
@@ -106,6 +142,7 @@ export function useGachaHistory(): UseGachaHistoryReturn {
   const selectGame = useCallback(
     (game: GachaGame | null) => {
       setSelectedGame(game);
+      cache.selectedGame = game;
 
       // Persist to localStorage
       if (game) {
@@ -119,6 +156,9 @@ export function useGachaHistory(): UseGachaHistoryReturn {
         setSelectedAccount(null);
         setHistory(null);
         setStats(null);
+        cache.selectedAccount = null;
+        cache.history = null;
+        cache.stats = null;
         localStorage.removeItem(STORAGE_KEY_UID);
       }
     },
@@ -128,6 +168,7 @@ export function useGachaHistory(): UseGachaHistoryReturn {
   // Select an account and load its history
   const selectAccount = useCallback(async (account: GachaAccount | null) => {
     setSelectedAccount(account);
+    cache.selectedAccount = account;
 
     // Persist to localStorage
     if (account) {
@@ -139,6 +180,21 @@ export function useGachaHistory(): UseGachaHistoryReturn {
     if (!account) {
       setHistory(null);
       setStats(null);
+      cache.history = null;
+      cache.stats = null;
+      return;
+    }
+
+    // Check if we have cached data for this account
+    const cacheKey = getAccountCacheKey(account.game, account.uid);
+    const cachedData = cache.historyByAccount.get(cacheKey);
+
+    if (cachedData) {
+      // Use cached data immediately
+      setHistory(cachedData.history);
+      setStats(cachedData.stats);
+      cache.history = cachedData.history;
+      cache.stats = cachedData.stats;
       return;
     }
 
@@ -151,6 +207,11 @@ export function useGachaHistory(): UseGachaHistoryReturn {
       ]);
       setHistory(historyData);
       setStats(statsData);
+
+      // Cache the data
+      cache.history = historyData;
+      cache.stats = statsData;
+      cache.historyByAccount.set(cacheKey, { history: historyData, stats: statsData });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setHistory(null);
@@ -180,6 +241,12 @@ export function useGachaHistory(): UseGachaHistoryReturn {
           uid: historyData.uid,
         });
         setStats(statsData);
+
+        // Update cache
+        cache.history = historyData;
+        cache.stats = statsData;
+        const cacheKey = getAccountCacheKey(request.game, historyData.uid);
+        cache.historyByAccount.set(cacheKey, { history: historyData, stats: statsData });
       }
 
       // Auto-select if this is a new account
@@ -207,11 +274,18 @@ export function useGachaHistory(): UseGachaHistoryReturn {
     try {
       await invoke('delete_gacha_history', { game, uid });
 
+      // Clear cache for this account
+      const cacheKey = getAccountCacheKey(game, uid);
+      cache.historyByAccount.delete(cacheKey);
+
       // Clear selection if deleted account was selected
       if (selectedAccount?.game === game && selectedAccount?.uid === uid) {
         setSelectedAccount(null);
         setHistory(null);
         setStats(null);
+        cache.selectedAccount = null;
+        cache.history = null;
+        cache.stats = null;
         localStorage.removeItem(STORAGE_KEY_UID);
       }
 
@@ -233,6 +307,10 @@ export function useGachaHistory(): UseGachaHistoryReturn {
     setError(null);
     try {
       await invoke<GachaAccount[]>('import_gacha_uigf', { data });
+      // Clear history cache since imported data may have changed existing accounts
+      cache.historyByAccount.clear();
+      cache.history = null;
+      cache.stats = null;
       await loadAccounts();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -250,10 +328,12 @@ export function useGachaHistory(): UseGachaHistoryReturn {
     };
   }, []);
 
-  // Initial load
+  // Initial load - skip if already cached
   useEffect(() => {
-    loadAccounts();
-    loadSupportedGames();
+    if (!cache.initialized) {
+      loadAccounts();
+      loadSupportedGames();
+    }
   }, [loadAccounts, loadSupportedGames]);
 
   // Restore selection from localStorage after initial data is loaded
@@ -263,6 +343,7 @@ export function useGachaHistory(): UseGachaHistoryReturn {
     if (supportedGames.length === 0) return;
 
     hasRestoredSelection.current = true;
+    cache.initialized = true;
 
     const savedGame = localStorage.getItem(STORAGE_KEY_GAME) as GachaGame | null;
     const savedUid = localStorage.getItem(STORAGE_KEY_UID);
@@ -273,6 +354,7 @@ export function useGachaHistory(): UseGachaHistoryReturn {
     if (isGameSupported && savedGame) {
       // Set the game without triggering localStorage write (already saved)
       setSelectedGame(savedGame);
+      cache.selectedGame = savedGame;
 
       // If we have accounts and a saved UID, try to restore the account selection
       if (savedUid && accounts.length > 0) {
@@ -288,6 +370,7 @@ export function useGachaHistory(): UseGachaHistoryReturn {
       // No saved game or saved game not supported - auto-select first detected game
       const firstGame = supportedGames[0].game;
       setSelectedGame(firstGame);
+      cache.selectedGame = firstGame;
       localStorage.setItem(STORAGE_KEY_GAME, firstGame);
     }
   }, [supportedGames, accounts, selectAccount]);

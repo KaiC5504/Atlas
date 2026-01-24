@@ -159,6 +159,27 @@ pub fn get_gacha_games_cache_path() -> PathBuf {
     get_data_dir().join("gacha_games_cache.json")
 }
 
+// Friends feature paths
+pub fn get_friends_dir() -> PathBuf {
+    get_data_dir().join("friends")
+}
+
+pub fn get_friends_data_json_path() -> PathBuf {
+    get_friends_dir().join("local_user.json")
+}
+
+pub fn get_friends_cache_json_path() -> PathBuf {
+    get_friends_dir().join("friends_cache.json")
+}
+
+pub fn get_memories_dir() -> PathBuf {
+    get_friends_dir().join("memories")
+}
+
+pub fn get_messages_cache_json_path() -> PathBuf {
+    get_friends_dir().join("messages_cache.json")
+}
+
 pub fn get_icons_dir() -> PathBuf {
     dirs::data_local_dir()
         .unwrap_or_else(|| PathBuf::from("."))
@@ -178,6 +199,8 @@ pub fn initialize_data_directories() -> Result<(), String> {
         get_music_tracks_dir(),
         get_music_playlists_dir(),
         get_gacha_dir(),
+        get_friends_dir(),
+        get_memories_dir(),
     ];
 
     for dir in &directories {

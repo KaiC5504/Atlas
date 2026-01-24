@@ -165,7 +165,7 @@ function BannerStatCard({ game, gachaType, stats }: BannerStatCardProps) {
         </div>
         <div className="bg-white/5 rounded p-2">
           <div className="text-text-primary font-bold">
-            {stats.average_pity > 0 ? stats.average_pity.toFixed(1) : '-'}
+            {stats.average_pity > 0 ? Math.floor(stats.average_pity) : '-'}
           </div>
           <div className="text-xs text-text-tertiary">Avg Pity</div>
         </div>

@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import type { Settings as SettingsType, UpdateSettingsParams } from '../types';
+import type { GachaAccount, GachaGame } from '../types/gacha';
+import { getGameDisplayName } from '../types/gacha';
 import {
   Settings as SettingsIcon,
   Download,
@@ -19,9 +21,15 @@ import {
   Info,
   Monitor,
   ListTodo,
+  Sparkles,
+  User,
+  Camera,
+  X,
+  Heart,
 } from 'lucide-react';
 import { DraggableNavList } from '../components/DraggableNavList';
 import { CustomSelect } from '../components/ui/CustomSelect';
+import { ImageCropModal } from '../components/ui/ImageCropModal';
 import { useNavigationSettingsContext } from '../contexts';
 
 const QUALITY_OPTIONS = [
@@ -71,6 +79,21 @@ export function Settings() {
 
   // Task Monitor state
   const [autoRestoreEnabled, setAutoRestoreEnabled] = useState(false);
+
+  // Gacha Accounts state
+  const [gachaAccounts, setGachaAccounts] = useState<GachaAccount[]>([]);
+  const [selectedGachaAccounts, setSelectedGachaAccounts] = useState<Record<string, string>>({});
+
+  // User Profile state
+  const [userDisplayName, setUserDisplayName] = useState('');
+  const [userAvatarBase64, setUserAvatarBase64] = useState<string | null>(null);
+
+  // Partner Widget state
+  const [partnerWidgetEnabled, setPartnerWidgetEnabled] = useState(true);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [cropImageSrc, setCropImageSrc] = useState<string | null>(null);
+  const [showCropModal, setShowCropModal] = useState(false);
 
   const {
     developerModeEnabled,
@@ -129,10 +152,21 @@ export function Settings() {
       setRunOnStartup(result.run_on_startup);
       setCloseToTray(result.close_to_tray);
       setAutoRestoreEnabled(result.auto_restore_enabled);
+      setSelectedGachaAccounts(result.selected_gacha_accounts || {});
+      setUserDisplayName(result.user_display_name || '');
+      setPartnerWidgetEnabled(result.partner_widget_enabled);
+
+      // Load avatar as base64 (bypasses asset protocol issues)
+      const avatarBase64 = await invoke<string | null>('get_user_avatar_base64');
+      setUserAvatarBase64(avatarBase64);
 
       // Check Discord connection status
       const connected = await invoke<boolean>('is_discord_connected');
       setDiscordConnected(connected);
+
+      // Load gacha accounts
+      const accounts = await invoke<GachaAccount[]>('get_gacha_accounts');
+      setGachaAccounts(accounts);
     } catch (err) {
       setError(String(err));
     } finally {
@@ -228,8 +262,138 @@ export function Settings() {
     await invoke('update_settings', { settings: { auto_restore_enabled: newEnabled } });
   }
 
+  async function handleGachaAccountChange(game: GachaGame, uid: string | null) {
+    const updated = { ...selectedGachaAccounts };
+    if (uid) {
+      updated[game] = uid;
+    } else {
+      delete updated[game];
+    }
+    setSelectedGachaAccounts(updated);
+    await invoke('update_settings', { settings: { selected_gacha_accounts: updated } });
+  }
+
+  async function handleAvatarUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Reset input so the same file can be selected again
+    e.target.value = '';
+
+    // Validate file type
+    const validTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp'];
+    if (!validTypes.includes(file.type)) {
+      setMessage({ type: 'error', text: 'Please select a valid image file (PNG, JPG, GIF, or WebP)' });
+      return;
+    }
+
+    // Validate file size (max 50MB)
+    if (file.size > 50 * 1024 * 1024) {
+      setMessage({ type: 'error', text: 'Image must be less than 50MB' });
+      return;
+    }
+
+    setMessage(null);
+
+    try {
+      // Read file as base64
+      const base64Full = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => reject(new Error('Failed to read file'));
+        reader.readAsDataURL(file);
+      });
+
+      // Show crop modal
+      setCropImageSrc(base64Full);
+      setShowCropModal(true);
+    } catch (err) {
+      setMessage({ type: 'error', text: `Failed to read image: ${err}` });
+    }
+  }
+
+  async function handleCropComplete(croppedBase64: string) {
+    setShowCropModal(false);
+    setCropImageSrc(null);
+    setUploadingAvatar(true);
+    setMessage(null);
+
+    try {
+      // Show preview immediately
+      setAvatarPreview(croppedBase64);
+
+      // Extract base64 data (remove data URL prefix)
+      const base64Data = croppedBase64.split(',')[1];
+
+      // Save to backend (cropped images are always JPEG)
+      await invoke<string>('save_user_avatar', {
+        imageData: base64Data,
+        fileExtension: 'jpg',
+      });
+
+      // Load the saved avatar as base64
+      const avatarBase64 = await invoke<string | null>('get_user_avatar_base64');
+      setUserAvatarBase64(avatarBase64);
+      setAvatarPreview(null); // Clear preview, use saved base64
+      setMessage({ type: 'success', text: 'Avatar saved!' });
+    } catch (err) {
+      setAvatarPreview(null);
+      setMessage({ type: 'error', text: `Failed to save avatar: ${err}` });
+    } finally {
+      setUploadingAvatar(false);
+    }
+  }
+
+  function handleCropCancel() {
+    setShowCropModal(false);
+    setCropImageSrc(null);
+  }
+
+  async function handleRemoveAvatar() {
+    setUserAvatarBase64(null);
+    setAvatarPreview(null);
+    await invoke('update_settings', { settings: { user_avatar_path: '' } });
+    setMessage({ type: 'success', text: 'Avatar removed' });
+  }
+
+  async function handleDisplayNameSave() {
+    try {
+      await invoke('update_settings', { settings: { user_display_name: userDisplayName } });
+      setMessage({ type: 'success', text: 'Display name saved!' });
+    } catch (err) {
+      setMessage({ type: 'error', text: `Failed to save display name: ${err}` });
+    }
+  }
+
+  async function handlePartnerWidgetToggle() {
+    const newEnabled = !partnerWidgetEnabled;
+    setPartnerWidgetEnabled(newEnabled);
+    await invoke('update_settings', { settings: { partner_widget_enabled: newEnabled } });
+  }
+
+  // Group gacha accounts by game
+  const gachaAccountsByGame = gachaAccounts.reduce((acc, account) => {
+    if (!acc[account.game]) {
+      acc[account.game] = [];
+    }
+    acc[account.game].push(account);
+    return acc;
+  }, {} as Record<GachaGame, GachaAccount[]>);
+
+  // Get all games that have accounts
+  const gamesWithAccounts = Object.keys(gachaAccountsByGame) as GachaGame[];
+
   return (
     <div className="max-w-2xl mx-auto animate-fade-in">
+      {/* Image Crop Modal */}
+      {showCropModal && cropImageSrc && (
+        <ImageCropModal
+          imageSrc={cropImageSrc}
+          onCropComplete={handleCropComplete}
+          onCancel={handleCropCancel}
+        />
+      )}
+
       {/* Page Header */}
       <div className="flex items-center gap-3 mb-8">
         <div className="p-2 rounded-lg bg-white/10">
@@ -256,6 +420,145 @@ export function Settings() {
 
       {!loading && !error && (
         <form onSubmit={handleSave} className="space-y-6">
+          {/* User Profile Section */}
+          <div className="card">
+            <div className="flex items-center gap-2 mb-4">
+              <User size={18} className="text-indigo-400" />
+              <h2 className="card-title mb-0">Profile</h2>
+            </div>
+            <p className="text-xs text-text-muted mb-4">
+              Your display name and avatar are used across Atlas and will sync to the server in the future.
+            </p>
+
+            <div className="flex items-start gap-6">
+              {/* Avatar Upload */}
+              <div className="flex flex-col items-center gap-2">
+                <div className="relative group">
+                  <div className="w-20 h-20 rounded-full overflow-hidden bg-white/10 flex items-center justify-center border-2 border-white/10">
+                    {avatarPreview || userAvatarBase64 ? (
+                      <img
+                        src={avatarPreview || userAvatarBase64 || ''}
+                        alt="Avatar"
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <User size={32} className="text-text-muted" />
+                    )}
+                  </div>
+                  {uploadingAvatar && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full">
+                      <Loader2 size={20} className="animate-spin text-white" />
+                    </div>
+                  )}
+                  {/* Hover overlay */}
+                  <label className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                    <Camera size={20} className="text-white" />
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/jpg,image/gif,image/webp"
+                      onChange={handleAvatarUpload}
+                      className="hidden"
+                      disabled={uploadingAvatar || saving}
+                    />
+                  </label>
+                </div>
+                {(avatarPreview || userAvatarBase64) && (
+                  <button
+                    type="button"
+                    onClick={handleRemoveAvatar}
+                    className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1"
+                    disabled={saving}
+                  >
+                    <X size={12} />
+                    Remove
+                  </button>
+                )}
+              </div>
+
+              {/* Display Name */}
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-text-secondary mb-2">
+                  Display Name
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={userDisplayName}
+                    onChange={(e) => setUserDisplayName(e.target.value)}
+                    placeholder="Enter your display name..."
+                    className="input flex-1"
+                    maxLength={32}
+                    disabled={saving}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleDisplayNameSave}
+                    disabled={saving || !userDisplayName.trim()}
+                    className="btn btn-primary px-4"
+                  >
+                    Save
+                  </button>
+                </div>
+                <p className="text-xs text-text-muted mt-1">
+                  This is how you appear to friends and in shared features
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Gacha Accounts Section */}
+          {gamesWithAccounts.length > 0 && (
+            <div className="card">
+              <div className="flex items-center gap-2 mb-4">
+                <Sparkles size={18} className="text-amber-400" />
+                <h2 className="card-title mb-0">Gacha Accounts</h2>
+              </div>
+              <p className="text-xs text-text-muted mb-4">
+                Select your default account for each game. Only accounts with synced gacha history are shown.
+              </p>
+              <div className="space-y-4">
+                {gamesWithAccounts.map((game) => {
+                  const accounts = gachaAccountsByGame[game];
+                  const options = [
+                    { value: '', label: 'None selected' },
+                    ...accounts.map((acc) => ({
+                      value: acc.uid,
+                      label: acc.uid,
+                    })),
+                  ];
+                  return (
+                    <div key={game}>
+                      <label className="block text-sm font-medium text-text-secondary mb-2">
+                        {getGameDisplayName(game)}
+                      </label>
+                      <CustomSelect
+                        value={selectedGachaAccounts[game] || ''}
+                        onChange={(value) => handleGachaAccountChange(game, value || null)}
+                        disabled={saving}
+                        options={options}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {gamesWithAccounts.length === 0 && (
+            <div className="card">
+              <div className="flex items-center gap-2 mb-4">
+                <Sparkles size={18} className="text-amber-400" />
+                <h2 className="card-title mb-0">Gacha Accounts</h2>
+              </div>
+              <div className="p-3 rounded-lg glass-subtle">
+                <div className="flex items-center gap-2 text-text-muted">
+                  <AlertCircle size={16} />
+                  <span>No gacha accounts found. Sync your history in the Gacha History module first.</span>
+                </div>
+              </div>
+            </div>
+          )}
+
           {developerModeEnabled && (
             <div className="card">
               <div className="flex items-center gap-2 mb-4">
@@ -563,6 +866,33 @@ export function Settings() {
                 onToggleVisibility={toggleItemVisibility}
                 disabled={saving}
               />
+            </div>
+
+            {/* Floating Partner Widget Toggle */}
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <label className="block text-sm font-medium text-text-secondary">
+                  <Heart size={14} className="inline mr-2 text-pink-400" />
+                  Floating Partner Widget
+                </label>
+                <p className="text-xs text-text-muted mt-0.5">
+                  Show a draggable avatar widget for quick access to your partner
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handlePartnerWidgetToggle}
+                disabled={saving}
+                className={`
+                  p-1 rounded-lg transition-colors
+                  ${partnerWidgetEnabled
+                    ? 'text-pink-400 hover:text-pink-300'
+                    : 'text-text-muted hover:text-text-secondary'
+                  }
+                `}
+              >
+                {partnerWidgetEnabled ? <ToggleRight size={32} /> : <ToggleLeft size={32} />}
+              </button>
             </div>
 
             {/* Developer Mode Toggle */}

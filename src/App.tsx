@@ -5,6 +5,7 @@ import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 import { Sidebar } from './components/Sidebar';
 import { UpdateToast } from './components/UpdateToast';
+import { FloatingPartnerWidget } from './components/friends';
 import { DefaultRouteRedirect } from './components/DefaultRouteRedirect';
 import { useErrorLogger } from './hooks/useErrorLogger';
 import { Dashboard } from './views/Dashboard';
@@ -18,6 +19,7 @@ import GameLauncher from './views/GameLauncher';
 import PlaylistUploader from './views/PlaylistUploader';
 import TaskMonitor from './views/TaskMonitor';
 import GachaHistory from './views/GachaHistory';
+import FriendsPage from './views/Friends';
 import { Settings } from './views/Settings';
 import { useUpdater } from './hooks';
 import { NavigationSettingsProvider } from './contexts';
@@ -91,6 +93,7 @@ function App() {
             <Route path="/playlist-uploader" element={<PlaylistUploader />} />
             <Route path="/tasks" element={<TaskMonitor />} />
             <Route path="/gacha" element={<GachaHistory />} />
+            <Route path="/friends" element={<FriendsPage />} />
             <Route path="/settings" element={<Settings />} />
           </Routes>
         </main>
@@ -103,6 +106,9 @@ function App() {
           onDismiss={dismissUpdate}
           onRetry={checkForUpdate}
         />
+
+        {/* Floating partner widget */}
+        <FloatingPartnerWidget />
       </div>
     </NavigationSettingsProvider>
   );
