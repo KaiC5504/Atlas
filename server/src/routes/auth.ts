@@ -45,6 +45,7 @@ export async function authRoutes(fastify: FastifyInstance): Promise<void> {
         username: username,
         auth_token: existing.auth_token,
         partner_id: existing.partner_id,
+        avatar_url: existing.avatar_url,
       };
     }
 
@@ -72,6 +73,7 @@ export async function authRoutes(fastify: FastifyInstance): Promise<void> {
       username,
       auth_token: authToken,
       partner_id: null,
+      avatar_url: null,
     };
   });
 

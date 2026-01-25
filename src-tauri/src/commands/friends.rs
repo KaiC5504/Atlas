@@ -1583,6 +1583,80 @@ pub fn get_partner_gacha_stats_from_server() -> Result<Option<PartnerGachaStatsR
     }
 }
 
+// ============= Avatar Upload Commands =============
+
+/// Upload avatar to server
+#[tauri::command]
+pub fn upload_avatar_to_server(image_data: String) -> Result<String, String> {
+    let local_user = get_local_user()?;
+    let token = local_user.auth_token.ok_or("Not registered with server")?;
+
+    let server_url = get_server_url();
+    let url = format!("{}/avatar", server_url);
+
+    #[derive(serde::Deserialize)]
+    struct AvatarResponse {
+        success: bool,
+        avatar_url: Option<String>,
+    }
+
+    let result: Result<AvatarResponse, String> = (|| {
+        let response = ureq::post(&url)
+            .set("Authorization", &format!("Bearer {}", token))
+            .set("Content-Type", "application/json")
+            .send_json(serde_json::json!({
+                "image_data": image_data
+            }))
+            .map_err(|e| format!("Failed to upload avatar: {}", e))?;
+
+        handle_response(response)
+    })();
+
+    match result {
+        Ok(resp) if resp.success => {
+            let avatar_url = resp.avatar_url.unwrap_or_default();
+            info!("Uploaded avatar to server: {}", avatar_url);
+            Ok(avatar_url)
+        }
+        Ok(_) => Err("Server reported failure".to_string()),
+        Err(e) => {
+            error!("Failed to upload avatar: {}", e);
+            Err(e)
+        }
+    }
+}
+
+/// Delete avatar from server
+#[tauri::command]
+pub fn delete_avatar_from_server() -> Result<(), String> {
+    let local_user = get_local_user()?;
+    let token = local_user.auth_token.ok_or("Not registered with server")?;
+
+    let server_url = get_server_url();
+    let url = format!("{}/avatar", server_url);
+
+    let result: Result<serde_json::Value, String> = (|| {
+        let response = ureq::delete(&url)
+            .set("Authorization", &format!("Bearer {}", token))
+            .call()
+            .map_err(|e| format!("Failed to delete avatar: {}", e))?;
+
+        handle_response(response)
+    })();
+
+    match result {
+        Ok(_) => {
+            info!("Deleted avatar from server");
+            Ok(())
+        }
+        Err(e) => {
+            warn!("Failed to delete avatar from server: {}", e);
+            // Don't fail if server deletion fails - local deletion still works
+            Ok(())
+        }
+    }
+}
+
 /// Get partner's gacha stats for a specific game
 #[tauri::command]
 pub fn get_partner_gacha_stats_for_game(game: String) -> Result<Option<PartnerGachaStats>, String> {

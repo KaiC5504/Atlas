@@ -335,7 +335,15 @@ export function Settings() {
       const avatarBase64 = await invoke<string | null>('get_user_avatar_base64');
       setUserAvatarBase64(avatarBase64);
       setAvatarPreview(null); // Clear preview, use saved base64
-      setMessage({ type: 'success', text: 'Avatar saved!' });
+
+      // Also sync to server for partner to see
+      try {
+        await invoke('upload_avatar_to_server', { imageData: base64Data });
+        setMessage({ type: 'success', text: 'Avatar saved and synced!' });
+      } catch (serverErr) {
+        console.warn('Failed to sync avatar to server:', serverErr);
+        setMessage({ type: 'success', text: 'Avatar saved locally (server sync pending)' });
+      }
     } catch (err) {
       setAvatarPreview(null);
       setMessage({ type: 'error', text: `Failed to save avatar: ${err}` });
@@ -353,6 +361,14 @@ export function Settings() {
     setUserAvatarBase64(null);
     setAvatarPreview(null);
     await invoke('update_settings', { settings: { user_avatar_path: '' } });
+
+    // Also remove from server
+    try {
+      await invoke('delete_avatar_from_server');
+    } catch (err) {
+      console.warn('Failed to remove avatar from server:', err);
+    }
+
     setMessage({ type: 'success', text: 'Avatar removed' });
   }
 

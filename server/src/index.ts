@@ -1,5 +1,8 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import fastifyStatic from '@fastify/static';
+import path from 'path';
+import fs from 'fs';
 import { initializeDatabase } from './database';
 import { authRoutes } from './routes/auth';
 import { presenceRoutes } from './routes/presence';
@@ -9,7 +12,14 @@ import { memoriesRoutes } from './routes/memories';
 import { calendarRoutes } from './routes/calendar';
 import { syncRoutes } from './routes/sync';
 import { gachaStatsRoutes } from './routes/gacha-stats';
+import { avatarRoutes } from './routes/avatar';
 import { authMiddleware } from './middleware/auth';
+
+// Ensure avatars directory exists
+const avatarsDir = path.join(__dirname, '..', 'data', 'avatars');
+if (!fs.existsSync(avatarsDir)) {
+  fs.mkdirSync(avatarsDir, { recursive: true });
+}
 
 const fastify = Fastify({
   logger: true,
@@ -20,6 +30,13 @@ fastify.register(cors, {
   origin: true, // Allow all origins for the desktop app
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
+});
+
+// Serve static files for avatars (no auth required)
+fastify.register(fastifyStatic, {
+  root: avatarsDir,
+  prefix: '/avatars/',
+  decorateReply: false,
 });
 
 // Health check endpoint (no auth required)
@@ -42,6 +59,7 @@ fastify.register(async (protectedRoutes) => {
   protectedRoutes.register(calendarRoutes, { prefix: '/calendar' });
   protectedRoutes.register(syncRoutes, { prefix: '/sync' });
   protectedRoutes.register(gachaStatsRoutes, { prefix: '/gacha-stats' });
+  protectedRoutes.register(avatarRoutes);
 });
 
 // Start server

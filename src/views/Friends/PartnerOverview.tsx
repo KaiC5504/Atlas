@@ -24,6 +24,15 @@ import {
   POKE_EMOJIS,
 } from '../../types/friends';
 
+const SERVER_BASE_URL = 'https://atlas-api.kaic5504.com';
+
+// Construct full avatar URL from path
+function getAvatarUrl(path: string | null | undefined): string | null {
+  if (!path) return null;
+  if (path.startsWith('http')) return path;
+  return `${SERVER_BASE_URL}${path}`;
+}
+
 interface PartnerOverviewProps {
   partner: FriendWithDetails | null;
   friends: FriendWithDetails[];
@@ -109,8 +118,16 @@ export function PartnerOverview({ partner, friends, onAddPartner }: PartnerOverv
           <div className="flex items-start gap-4">
             {/* Avatar */}
             <div className="relative">
-              <div className="w-20 h-20 rounded-full bg-gradient-to-br from-pink-500 to-purple-500 flex items-center justify-center text-2xl font-bold text-white">
-                {partner.friend.nickname?.[0] || partner.user.username[0]}
+              <div className="w-20 h-20 rounded-full bg-gradient-to-br from-pink-500 to-purple-500 flex items-center justify-center text-2xl font-bold text-white overflow-hidden">
+                {getAvatarUrl(partner.user.avatar_url) ? (
+                  <img
+                    src={getAvatarUrl(partner.user.avatar_url)!}
+                    alt={partner.friend.nickname || partner.user.username}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  partner.friend.nickname?.[0] || partner.user.username[0]
+                )}
               </div>
               <div
                 className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-full border-2 border-surface-elevated ${getPresenceStatusColor(

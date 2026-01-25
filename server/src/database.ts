@@ -24,6 +24,7 @@ export function initializeDatabase(): void {
       username TEXT NOT NULL,
       auth_token TEXT UNIQUE NOT NULL,
       partner_id TEXT,
+      avatar_url TEXT,
       created_at INTEGER NOT NULL,
       FOREIGN KEY (partner_id) REFERENCES users(id)
     );
@@ -119,7 +120,22 @@ export function initializeDatabase(): void {
     CREATE INDEX IF NOT EXISTS idx_calendar_partner ON calendar_events(partner_id, created_at);
   `);
 
+  // Run migrations for existing databases
+  runMigrations();
+
   console.log('Database initialized successfully');
+}
+
+// Run migrations for existing databases
+function runMigrations(): void {
+  // Add avatar_url column if it doesn't exist
+  const tableInfo = db.prepare("PRAGMA table_info(users)").all() as { name: string }[];
+  const hasAvatarUrl = tableInfo.some(col => col.name === 'avatar_url');
+
+  if (!hasAvatarUrl) {
+    db.exec('ALTER TABLE users ADD COLUMN avatar_url TEXT');
+    console.log('Migration: Added avatar_url column to users table');
+  }
 }
 
 // Type definitions for database queries
@@ -129,6 +145,7 @@ export interface DbUser {
   username: string;
   auth_token: string;
   partner_id: string | null;
+  avatar_url: string | null;
   created_at: number;
 }
 

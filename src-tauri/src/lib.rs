@@ -24,16 +24,17 @@ use commands::{
     friends::{
         add_friend_by_code, add_friend_locally, add_wishlist_item, clear_friends_data,
         connect_to_server, create_calendar_event, create_countdown, create_demo_friends_data,
-        create_memory, delete_calendar_event, delete_memory, disconnect_from_server,
-        get_calendar_events, get_countdowns, get_friends_connection_status, get_friends_list,
-        get_local_presence, get_local_user, get_memories, get_messages,
+        create_memory, delete_avatar_from_server, delete_calendar_event, delete_memory,
+        disconnect_from_server, get_calendar_events, get_countdowns, get_friends_connection_status,
+        get_friends_list, get_local_presence, get_local_user, get_memories, get_messages,
         get_offline_queue_count, get_partner, get_partner_gacha_stats, get_partner_gacha_stats_for_game,
         get_partner_gacha_stats_from_server, get_partner_presence, get_partner_wishlist,
         get_shared_gacha_stats, get_unread_message_count, get_upcoming_events, get_wishlist,
         is_friends_connected, mark_messages_read, remove_friend, remove_wishlist_item,
         save_friends_cache, save_local_user, send_message, send_poke, set_friend_code,
         set_friends_server_url, set_mood_message, set_username, sync_now, update_calendar_event,
-        update_friend_nickname, update_presence, upload_gacha_stats, validate_friend_code,
+        update_friend_nickname, update_presence, upload_avatar_to_server, upload_gacha_stats,
+        validate_friend_code,
     },
     gacha::{
         delete_gacha_history, export_gacha_uigf, get_gacha_accounts, get_gacha_game_icon_path,
@@ -485,6 +486,9 @@ pub fn run() {
             upload_gacha_stats,
             get_partner_gacha_stats_from_server,
             get_partner_gacha_stats_for_game,
+            // Avatar upload commands
+            upload_avatar_to_server,
+            delete_avatar_from_server,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

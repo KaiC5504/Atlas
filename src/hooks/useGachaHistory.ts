@@ -10,6 +10,7 @@ import type {
   RefreshGachaRequest,
   UigfExport,
 } from '../types/gacha';
+import type { SharedGachaStatsPayload, LocalUserData } from '../types/friends';
 
 // LocalStorage keys for persisting user selection
 const STORAGE_KEY_GAME = 'gacha_selected_game';
@@ -41,6 +42,40 @@ const cache: GachaCache = {
 // Helper to create cache key for account data
 function getAccountCacheKey(game: GachaGame, uid: string): string {
   return `${game}:${uid}`;
+}
+
+// Get the Character Event banner ID for a game
+function getCharacterEventBannerId(game: GachaGame): string {
+  switch (game) {
+    case 'genshin': return '301';
+    case 'star_rail': return '11';
+    case 'zzz': return '2001';
+    default: return '301';
+  }
+}
+
+// Upload gacha stats to server after sync
+async function uploadGachaStatsToServer(game: GachaGame, stats: GachaStats): Promise<void> {
+  try {
+    const localUser = await invoke<LocalUserData>('get_local_user');
+    if (!localUser.auth_token) return; // Not registered, skip silently
+
+    const bannerId = getCharacterEventBannerId(game);
+    const characterBannerStats = stats.banner_stats[bannerId];
+
+    const payload: SharedGachaStatsPayload = {
+      game: game,
+      total_pulls: stats.total_pulls,
+      five_star_count: stats.five_star_count,
+      four_star_count: stats.four_star_count,
+      average_pity: characterBannerStats?.average_pity || 0,
+      current_pity: characterBannerStats?.current_pity || 0,
+    };
+
+    await invoke('upload_gacha_stats', { stats: payload });
+  } catch (err) {
+    console.error('Failed to upload gacha stats to server:', err);
+  }
 }
 
 export interface GachaProgress {
@@ -247,6 +282,18 @@ export function useGachaHistory(): UseGachaHistoryReturn {
         cache.stats = statsData;
         const cacheKey = getAccountCacheKey(request.game, historyData.uid);
         cache.historyByAccount.set(cacheKey, { history: historyData, stats: statsData });
+
+        // Upload stats to server after successful sync
+        await uploadGachaStatsToServer(request.game, statsData);
+      } else {
+        // For non-selected account, still fetch stats and upload
+        const statsData = await invoke<GachaStats>('get_gacha_stats', {
+          game: request.game,
+          uid: historyData.uid,
+        });
+        const cacheKey = getAccountCacheKey(request.game, historyData.uid);
+        cache.historyByAccount.set(cacheKey, { history: historyData, stats: statsData });
+        await uploadGachaStatsToServer(request.game, statsData);
       }
 
       // Auto-select if this is a new account

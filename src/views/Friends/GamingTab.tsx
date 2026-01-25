@@ -13,7 +13,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { useGachaHistory } from '../../hooks/useGachaHistory';
-import type { FriendWithDetails, PartnerGachaStats, SharedGachaStatsPayload } from '../../types/friends';
+import type { FriendWithDetails, PartnerGachaStats } from '../../types/friends';
 import type { Settings } from '../../types/settings';
 import { getGameDisplayName } from '../../types/gacha';
 
@@ -28,7 +28,6 @@ export function GamingTab({ partner }: GamingTabProps) {
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [partnerStats, setPartnerStats] = useState<PartnerGachaStats | null>(null);
   const [isLoadingPartnerStats, setIsLoadingPartnerStats] = useState(false);
-  const [lastUploadedGame, setLastUploadedGame] = useState<string | null>(null);
 
   // Load selected accounts from settings
   useEffect(() => {
@@ -89,29 +88,6 @@ export function GamingTab({ partner }: GamingTabProps) {
 
   const characterBannerId = getCharacterEventBannerId(selectedGame);
 
-  // Upload own stats to server when they change
-  const uploadStats = useCallback(async () => {
-    if (!stats || !selectedGame || !hasAccountForSelectedGame) return;
-
-    const characterBannerStats = stats.banner_stats[getCharacterEventBannerId(selectedGame)];
-
-    const payload: SharedGachaStatsPayload = {
-      game: selectedGame,
-      total_pulls: stats.total_pulls,
-      five_star_count: stats.five_star_count,
-      four_star_count: stats.four_star_count,
-      average_pity: characterBannerStats?.average_pity || 0,
-      current_pity: characterBannerStats?.current_pity || 0,
-    };
-
-    try {
-      await invoke('upload_gacha_stats', { stats: payload });
-      setLastUploadedGame(selectedGame);
-    } catch (err) {
-      console.error('Failed to upload gacha stats:', err);
-    }
-  }, [stats, selectedGame, hasAccountForSelectedGame]);
-
   // Fetch partner stats from server
   const fetchPartnerStats = useCallback(async () => {
     if (!partner || !selectedGame) {
@@ -130,13 +106,6 @@ export function GamingTab({ partner }: GamingTabProps) {
       setIsLoadingPartnerStats(false);
     }
   }, [partner, selectedGame]);
-
-  // Upload stats when game changes and stats are loaded
-  useEffect(() => {
-    if (stats && selectedGame && hasAccountForSelectedGame && lastUploadedGame !== selectedGame) {
-      uploadStats();
-    }
-  }, [stats, selectedGame, hasAccountForSelectedGame, lastUploadedGame, uploadStats]);
 
   // Fetch partner stats when game changes
   useEffect(() => {

@@ -1,4 +1,3 @@
-import React from 'react';
 import { Wifi, WifiOff, RefreshCw, AlertCircle, Loader2, Clock } from 'lucide-react';
 import type { ConnectionState } from '../../types/friends';
 

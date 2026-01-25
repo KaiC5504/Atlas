@@ -314,7 +314,7 @@ export const DEFAULT_SERVER_URL = 'https://atlas-api.kaic5504.com';
 export type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'error';
 
 // Sync result from server
-export interface SyncResult {
+export interface FriendsSyncResult {
   success: boolean;
   timestamp: number;
   has_new_data: boolean;

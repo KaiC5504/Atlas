@@ -5,7 +5,7 @@ import type {
   Presence,
   PresenceStatus,
   UpdatePresenceRequest,
-  SyncResult,
+  FriendsSyncResult,
   ServerPresenceResponse,
 } from '../types/friends';
 
@@ -116,7 +116,7 @@ export function usePartnerPresence(): UsePartnerPresenceReturn {
   // Sync with server
   const doSync = useCallback(async () => {
     try {
-      const result = await invoke<SyncResult>('sync_now');
+      const result = await invoke<FriendsSyncResult>('sync_now');
       if (result.success) {
         setLastSyncTime(result.timestamp);
       }

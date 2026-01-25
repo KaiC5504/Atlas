@@ -174,6 +174,7 @@ export async function syncRoutes(fastify: FastifyInstance): Promise<void> {
       id: partner.id,
       friend_code: partner.friend_code,
       username: partner.username,
+      avatar_url: partner.avatar_url,
     };
 
     // Get partner's presence

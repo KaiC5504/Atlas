@@ -8,6 +8,14 @@ import type { Settings } from '../../types/settings';
 
 const WIDGET_SIZE = 56;
 const DEFAULT_OFFSET = 20;
+const SERVER_BASE_URL = 'https://atlas-api.kaic5504.com';
+
+// Construct full avatar URL from path
+function getAvatarUrl(path: string | null | undefined): string | null {
+  if (!path) return null;
+  if (path.startsWith('http')) return path;
+  return `${SERVER_BASE_URL}${path}`;
+}
 
 export function FloatingPartnerWidget() {
   const navigate = useNavigate();
@@ -148,6 +156,7 @@ export function FloatingPartnerWidget() {
   const presence = partnerPresence || partner.presence;
   const displayName = partner.friend.nickname || partner.user.username;
   const initial = displayName[0]?.toUpperCase() || '?';
+  const avatarUrl = getAvatarUrl(partner.user.avatar_url);
 
   // Presence ring color
   const getRingColor = () => {
@@ -194,9 +203,9 @@ export function FloatingPartnerWidget() {
           ${isDragging ? 'scale-105' : 'group-hover:scale-105'}
         `}
       >
-        {partner.user.avatar_url ? (
+        {avatarUrl ? (
           <img
-            src={partner.user.avatar_url}
+            src={avatarUrl}
             alt={displayName}
             className="w-full h-full rounded-full object-cover"
             draggable={false}

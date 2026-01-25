@@ -7,7 +7,7 @@ import type {
   RelationshipType,
   Poke,
   ConnectionState,
-  SyncResult,
+  FriendsSyncResult,
   ValidateResponse,
   ServerPresenceResponse,
 } from '../types/friends';
@@ -40,7 +40,7 @@ export interface UseFriendsReturn {
   // Server connection
   connectToServer: () => Promise<void>;
   disconnectFromServer: () => Promise<void>;
-  syncNow: () => Promise<SyncResult>;
+  syncNow: () => Promise<FriendsSyncResult>;
 }
 
 export function useFriends(): UseFriendsReturn {
@@ -322,9 +322,9 @@ export function useFriends(): UseFriendsReturn {
   }, []);
 
   // Manual sync
-  const syncNow = useCallback(async (): Promise<SyncResult> => {
+  const syncNow = useCallback(async (): Promise<FriendsSyncResult> => {
     try {
-      const result = await invoke<SyncResult>('sync_now');
+      const result = await invoke<FriendsSyncResult>('sync_now');
       if (result.success) {
         setLastSyncTime(result.timestamp);
         // Reload friends list to update presence
